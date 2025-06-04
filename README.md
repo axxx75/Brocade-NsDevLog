@@ -1,6 +1,10 @@
 # Switch Log Analyzer
 
-Un sistema avanzato di analisi log per switch di rete Brocade che raccoglie, elabora e analizza i log di eventi WWN attraverso connessioni SSH automatizzate con funzionalità di scheduling intelligente e lookup ottimizzato.
+Un sistema avanzato di analisi log per switch fibrechannel Brocade che raccoglie, elabora e analizza i log di eventi "nsdevlog" attraverso connessioni SSH automatizzate con funzionalità di scheduling intelligente e lookup ottimizzato.
+
+# NSDevLog
+loremipsum....loremipsum
+
 
 ## 🏗️ Architettura del Sistema
 
