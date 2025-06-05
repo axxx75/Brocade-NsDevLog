@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Interface - Switch Log Analyzer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .stats-card {
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border: none;
+            transition: transform 0.2s;
+        }
+        .stats-card:hover {
+            transform: translateY(-2px);
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        .search-section {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+        }
+        .collection-section {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+        }
+        .results-table {
+            font-size: 0.9rem;
+        }
+        .results-table td {
+            vertical-align: middle;
+        }
+        .wwn-cell {
+            font-family: monospace;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-database me-2"></i>
+                Switch Log Analyzer - Database Interface
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/">
+                    <i class="fas fa-file-alt me-1"></i> File Interface
+                </a>
+                <a class="nav-link" href="/scheduler">
+                    <i class="fas fa-clock me-1"></i> Scheduler
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <!-- Database Statistics -->
+        <div class="row mb-4" id="statsRow">
+            <div class="col-md-3">
+                <div class="card stats-card bg-primary text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-database fa-2x mb-2"></i>
+                        <div class="metric-value" id="totalEntries">-</div>
+                        <div>Total Entries</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card bg-success text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-collection fa-2x mb-2"></i>
+                        <div class="metric-value" id="totalCollections">-</div>
+                        <div>Collections</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card bg-info text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-tags fa-2x mb-2"></i>
+                        <div class="metric-value" id="totalAliases">-</div>
+                        <div>Aliases</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card bg-warning text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-network-wired fa-2x mb-2"></i>
+                        <div class="metric-value" id="activeSwitches">-</div>
+                        <div>Active Switches</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Smart Collection Section -->
+        <div class="collection-section">
+            <h5 class="fw-bold mb-3">
+                <i class="fas fa-plus-circle me-2"></i>
+                Smart Data Collection
+            </h5>
+            <p class="text-muted mb-3">
+                <strong>Cycle Life Logic:</strong> If database is empty, performs full collection. If populated, collects only new entries since last collection.
+            </p>
+            <div id="collectionTypeInfo" class="alert alert-info mb-3" style="display:none;">
+                <i class="fas fa-info-circle me-2"></i>
+                <span id="collectionTypeText"></span>
+            </div>
+            <div class="row">
+                <div class="col-md-5">
+                    <label for="username" class="form-label">Username</label>
+                    <input type="text" class="form-control" id="username" placeholder="Switch username">
+                </div>
+                <div class="col-md-5">
+                    <label for="password" class="form-label">Password</label>
+                    <input type="password" class="form-control" id="password" placeholder="Switch password">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button id="startCollection" class="btn btn-primary w-100">
+                        <i class="fas fa-play me-1"></i>
+                        Start Collection
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alias Upload Section -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-upload me-2"></i>
+                            Upload Aliases CSV
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <input type="file" class="form-control" id="aliasFile" accept=".csv">
+                        <button id="uploadAliases" class="btn btn-success mt-2">
+                            <i class="fas fa-upload me-1"></i>
+                            Upload & Process
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-history me-2"></i>
+                            Recent Collections
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="recentCollections" class="small">
+                            Loading...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Advanced Search Section -->
+        <div class="search-section">
+            <h5 class="fw-bold mb-3">
+                <i class="fas fa-search me-2"></i>
+                Advanced Database Search
+            </h5>
+            <div class="row">
+                <div class="col-md-3">
+                    <label for="searchWwn" class="form-label">WWN</label>
+                    <input type="text" class="form-control" id="searchWwn" placeholder="Enter WWN">
+                </div>
+                <div class="col-md-3">
+                    <label for="searchAlias" class="form-label">Alias</label>
+                    <input type="text" class="form-control" id="searchAlias" placeholder="Enter alias">
+                </div>
+                <div class="col-md-2">
+                    <label for="searchSwitch" class="form-label">Switch</label>
+                    <input type="text" class="form-control" id="searchSwitch" placeholder="Switch name">
+                </div>
+                <div class="col-md-2">
+                    <label for="searchEvent" class="form-label">Event Type</label>
+                    <input type="text" class="form-control" id="searchEvent" placeholder="Event type">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button id="searchButton" class="btn btn-success w-100">
+                        <i class="fas fa-search me-1"></i>
+                        Search
+                    </button>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-md-3">
+                    <label for="startDate" class="form-label">Start Date</label>
+                    <input type="datetime-local" class="form-control" id="startDate">
+                </div>
+                <div class="col-md-3">
+                    <label for="endDate" class="form-label">End Date</label>
+                    <input type="datetime-local" class="form-control" id="endDate">
+                </div>
+                <div class="col-md-2">
+                    <label for="resultLimit" class="form-label">Max Results</label>
+                    <input type="number" class="form-control" id="resultLimit" value="1000" min="100" max="10000">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button id="clearSearch" class="btn btn-outline-secondary w-100">
+                        <i class="fas fa-times me-1"></i>
+                        Clear
+                    </button>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">&nbsp;</label>
+                    <button id="exportResults" class="btn btn-outline-primary w-100" disabled>
+                        <i class="fas fa-download me-1"></i>
+                        Export
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Viewer Section -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h6 class="mb-0">
+                    <i class="fas fa-database me-2"></i>
+                    Log Entries Database
+                </h6>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-primary" id="totalEntriesDisplay">0 entries</span>
+                    <select class="form-select form-select-sm" id="itemsPerPageSelect" style="width: auto;">
+                        <option value="25">25 per page</option>
+                        <option value="50">50 per page</option>
+                        <option value="100" selected>100 per page</option>
+                        <option value="200">200 per page</option>
+                        <option value="500">500 per page</option>
+                    </select>
+                    <button class="btn btn-sm btn-outline-primary" id="refreshDataBtn">
+                        <i class="fas fa-sync me-1"></i>
+                        Refresh
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover mb-0" id="dataTable">
+                        <thead class="table-dark">
+                            <tr>
+                                <th style="width: 14%;">Timestamp</th>
+                                <th style="width: 10%;">Switch</th>
+                                <th style="width: 8%;">Context</th>
+                                <th style="width: 20%;">WWN</th>
+                                <th style="width: 10%;">Port Info</th>
+                                <th style="width: 15%;">Alias</th>
+                                <th style="width: 15%;">NodeSymbol</th>
+                                <th style="width: 8%;">Event</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTableBody">
+                            <tr>
+                                <td colspan="8" class="text-center py-4 text-muted">
+                                    <i class="fas fa-database fa-2x mb-2"></i>
+                                    <div>No data loaded. Perform a collection to populate the database.</div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <!-- Pagination -->
+                <div class="d-flex justify-content-between align-items-center p-3 border-top">
+                    <div class="text-muted" id="showingInfo">
+                        Showing 0 of 0 entries
+                    </div>
+                    <nav>
+                        <ul class="pagination pagination-sm mb-0" id="pagination">
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Messages -->
+        <div id="statusMessages" class="mt-3"></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let allData = [];
+        let filteredData = [];
+        let currentPage = 1;
+        let itemsPerPage = 100;
+        let isSearchActive = false;
+
+        // Load initial data
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDatabaseStats();
+            loadRecentCollections();
+            loadAllData();
+            setupDataViewerEvents();
+        });
+
+        async function loadDatabaseStats() {
+            try {
+                const response = await fetch('/api/db/stats');
+                const stats = await response.json();
+                
+                document.getElementById('totalEntries').textContent = stats.total_entries.toLocaleString();
+                document.getElementById('totalCollections').textContent = stats.total_collections;
+                document.getElementById('totalAliases').textContent = stats.total_aliases.toLocaleString();
+                document.getElementById('activeSwitches').textContent = stats.switch_statuses.length;
+                
+            } catch (error) {
+                console.error('Failed to load database stats:', error);
+            }
+        }
+
+        async function loadRecentCollections() {
+            try {
+                const response = await fetch('/api/db/collections');
+                const data = await response.json();
+                
+                const container = document.getElementById('recentCollections');
+                if (data.collections.length === 0) {
+                    container.innerHTML = '<em>No collections yet</em>';
+                    return;
+                }
+                
+                let html = '';
+                data.collections.slice(0, 3).forEach(collection => {
+                    const date = new Date(collection.started_at).toLocaleString();
+                    const statusClass = collection.status === 'completed' ? 'success' : 
+                                       collection.status === 'failed' ? 'danger' : 'primary';
+                    
+                    html += `
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span>${date}</span>
+                            <span class="badge bg-${statusClass}">${collection.status}</span>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+                
+            } catch (error) {
+                console.error('Failed to load recent collections:', error);
+            }
+        }
+
+        // Start smart collection (cycle life logic)
+        document.getElementById('startCollection').addEventListener('click', async function() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                showMessage('Please enter username and password', 'warning');
+                return;
+            }
+            
+            try {
+                // Show collection type info before starting
+                const statsResponse = await fetch('/api/db/stats');
+                const statsData = await statsResponse.json();
+                const totalEntries = statsData.total_entries || 0;
+                
+                const collectionType = totalEntries === 0 ? 'full' : 'incremental';
+                const infoDiv = document.getElementById('collectionTypeInfo');
+                const textSpan = document.getElementById('collectionTypeText');
+                
+                if (collectionType === 'full') {
+                    textSpan.textContent = `Database is empty (${totalEntries} entries). Will perform FULL collection of all logs.`;
+                    infoDiv.className = 'alert alert-warning mb-3';
+                } else {
+                    textSpan.textContent = `Database has ${totalEntries} entries. Will perform INCREMENTAL collection of new logs only.`;
+                    infoDiv.className = 'alert alert-info mb-3';
+                }
+                infoDiv.style.display = 'block';
+                
+                const response = await fetch('/api/db/collect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage(`${result.message} (${result.collection_type} collection)`, 'success');
+                    // Auto-reload data after collection completes
+                    setTimeout(() => {
+                        loadDatabaseStats();
+                        loadRecentCollections();
+                        loadAllData(); // Reload all data to show new entries
+                    }, 3000);
+                } else {
+                    showMessage('Error: ' + result.error, 'danger');
+                }
+                
+            } catch (error) {
+                showMessage('Collection failed: ' + error.message, 'danger');
+            }
+        });
+
+        // Upload aliases
+        document.getElementById('uploadAliases').addEventListener('click', async function() {
+            const fileInput = document.getElementById('aliasFile');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showMessage('Please select a CSV file', 'warning');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await fetch('/api/db/aliases/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage(result.message, 'success');
+                    loadDatabaseStats();
+                } else {
+                    showMessage('Upload failed: ' + result.error, 'danger');
+                }
+                
+            } catch (error) {
+                showMessage('Upload failed: ' + error.message, 'danger');
+            }
+        });
+
+        // Search functionality - add debug logs
+        console.log('🔧 Initializing search functionality...');
+        
+        const searchButton = document.getElementById('searchButton');
+        const clearButton = document.getElementById('clearSearch');
+        
+        console.log('🔧 Search button found:', !!searchButton);
+        console.log('🔧 Clear button found:', !!clearButton);
+        
+        if (searchButton) {
+            searchButton.addEventListener('click', performSearch);
+            console.log('🔧 Search button listener added');
+        } else {
+            console.error('❌ Search button not found!');
+        }
+        
+        if (clearButton) {
+            clearButton.addEventListener('click', clearSearch);
+            console.log('🔧 Clear button listener added');
+        } else {
+            console.error('❌ Clear button not found!');
+        }
+
+        async function performSearch() {
+            console.log('🔍 Starting search...');
+            const wwn = document.getElementById('searchWwn').value.trim();
+            const alias = document.getElementById('searchAlias').value.trim();
+            const switchName = document.getElementById('searchSwitch').value.trim();
+            const eventType = document.getElementById('searchEvent').value.trim();
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            const limit = parseInt(document.getElementById('resultLimit').value) || 1000;
+            
+            console.log('🔍 Search parameters:', { wwn, alias, switchName, eventType, startDate, endDate, limit });
+
+            const params = new URLSearchParams();
+            if (wwn) params.append('wwn', wwn);
+            if (alias) params.append('alias', alias);
+            if (switchName) params.append('switch_name', switchName);
+            if (eventType) params.append('event_type', eventType);
+            if (startDate) params.append('start_date', startDate);
+            if (endDate) params.append('end_date', endDate);
+            params.append('limit', limit);
+
+            try {
+                const url = `/api/db/search?${params}`;
+                console.log('🔍 Calling API:', url);
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                console.log('🔍 API Response:', data);
+                
+                if (data.results) {
+                    filteredData = data.results || [];
+                    isSearchActive = true;
+                    currentPage = 1;
+                    console.log('🔍 Setting filtered data:', filteredData.length, 'entries');
+                    displayFilteredData();
+                    showMessage(`Found ${filteredData.length} results`, 'success');
+                    document.getElementById('exportResults').disabled = filteredData.length === 0;
+                } else {
+                    console.error('🔍 Search failed:', data);
+                    showMessage('Search failed: ' + data.error, 'danger');
+                }
+                
+            } catch (error) {
+                showMessage('Search failed: ' + error.message, 'danger');
+            }
+        }
+
+        function displayResults(results) {
+            const tbody = document.getElementById('resultsTable');
+            
+            if (results.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            <i class="fas fa-search fa-2x mb-2"></i><br>
+                            No results found for your search criteria
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            let html = '';
+            results.forEach(entry => {
+                const timestamp = new Date(entry.timestamp).toLocaleString();
+                html += `
+                    <tr>
+                        <td>${timestamp}</td>
+                        <td>${entry.switch_name || '-'}</td>
+                        <td>${entry.context || '-'}</td>
+                        <td>${entry.event_type || '-'}</td>
+                        <td class="wwn-cell">${entry.wwn || '-'}</td>
+                        <td>${entry.alias || '-'}</td>
+                        <td>${entry.node_symbol || '-'}</td>
+                        <td>${entry.port_info || '-'}</td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        }
+
+        function clearSearch() {
+            // Clear search inputs
+            document.getElementById('searchWwn').value = '';
+            document.getElementById('searchAlias').value = '';
+            document.getElementById('searchSwitch').value = '';
+            document.getElementById('searchEvent').value = '';
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            document.getElementById('resultLimit').value = '1000';
+            
+            // Reset to show all data
+            isSearchActive = false;
+            currentPage = 1;
+            displayData();
+            showMessage('Search cleared', 'info');
+            document.getElementById('exportResults').disabled = true;
+        }
+
+        function showMessage(message, type) {
+            const container = document.getElementById('statusMessages');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type} alert-dismissible fade show`;
+            alert.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            container.appendChild(alert);
+            
+            setTimeout(() => {
+                if (alert.parentNode) {
+                    alert.parentNode.removeChild(alert);
+                }
+            }, 5000);
+        }
+
+        // Data Viewer Functions
+        function setupDataViewerEvents() {
+            // Items per page selector
+            document.getElementById('itemsPerPageSelect').addEventListener('change', function() {
+                itemsPerPage = parseInt(this.value);
+                currentPage = 1;
+                if (isSearchActive) {
+                    displayFilteredData();
+                } else {
+                    displayData();
+                }
+            });
+
+            // Refresh button
+            document.getElementById('refreshDataBtn').addEventListener('click', function() {
+                loadAllData();
+            });
+        }
+
+        async function loadAllData() {
+            try {
+                const response = await fetch('/api/db/search?limit=0'); // Get all data
+                const data = await response.json();
+                
+                if (data.success) {
+                    allData = data.entries || [];
+                    isSearchActive = false;
+                    currentPage = 1;
+                    displayData();
+                    updateTotalEntriesDisplay();
+                } else {
+                    showMessage('Failed to load data: ' + data.error, 'danger');
+                }
+            } catch (error) {
+                console.error('Failed to load data:', error);
+                showMessage('Failed to load data: ' + error.message, 'danger');
+            }
+        }
+
+        function displayData() {
+            const data = isSearchActive ? filteredData : allData;
+            const totalItems = data.length;
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+            const pageData = data.slice(startIndex, endIndex);
+
+            const tbody = document.getElementById('dataTableBody');
+            
+            if (pageData.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="text-center py-4 text-muted">
+                            <i class="fas fa-database fa-2x mb-2"></i>
+                            <div>No data available</div>
+                        </td>
+                    </tr>
+                `;
+            } else {
+                tbody.innerHTML = pageData.map(entry => `
+                    <tr>
+                        <td class="text-nowrap">${formatTimestamp(entry.timestamp)}</td>
+                        <td><span class="badge bg-secondary">${entry.switch_name}</span></td>
+                        <td class="text-center">${entry.context}</td>
+                        <td class="font-monospace small">${entry.wwn || 'N/A'}</td>
+                        <td>${entry.port_info || 'N/A'}</td>
+                        <td class="text-success">${entry.alias || 'N/A'}</td>
+                        <td class="text-info">${entry.node_symbol || 'N/A'}</td>
+                        <td><span class="badge bg-primary">${entry.event_type || 'Unknown'}</span></td>
+                    </tr>
+                `).join('');
+            }
+
+            updatePagination(totalItems);
+            updateShowingInfo(startIndex + 1, endIndex, totalItems);
+        }
+
+        function displayFilteredData() {
+            console.log('📊 displayFilteredData called, filteredData length:', filteredData.length);
+            displayData(); // Same logic as displayData
+        }
+
+        function updatePagination(totalItems) {
+            const totalPages = Math.ceil(totalItems / itemsPerPage);
+            const pagination = document.getElementById('pagination');
+            
+            if (totalPages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+
+            let html = '';
+            
+            // Previous button
+            if (currentPage > 1) {
+                html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${currentPage - 1})">Previous</a></li>`;
+            }
+
+            // Page numbers
+            const maxVisible = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+            
+            if (endPage - startPage + 1 < maxVisible) {
+                startPage = Math.max(1, endPage - maxVisible + 1);
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                const active = i === currentPage ? 'active' : '';
+                html += `<li class="page-item ${active}"><a class="page-link" href="#" onclick="changePage(${i})">${i}</a></li>`;
+            }
+
+            // Next button
+            if (currentPage < totalPages) {
+                html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${currentPage + 1})">Next</a></li>`;
+            }
+
+            pagination.innerHTML = html;
+        }
+
+        function changePage(page) {
+            currentPage = page;
+            if (isSearchActive) {
+                displayFilteredData();
+            } else {
+                displayData();
+            }
+        }
+
+        function updateShowingInfo(start, end, total) {
+            document.getElementById('showingInfo').textContent = 
+                `Showing ${start} to ${end} of ${total.toLocaleString()} entries`;
+        }
+
+        function updateTotalEntriesDisplay() {
+            document.getElementById('totalEntriesDisplay').textContent = 
+                `${allData.length.toLocaleString()} entries`;
+        }
+
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return 'N/A';
+            const date = new Date(timestamp);
+            return date.toLocaleString('en-US', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        // Auto-refresh stats every 30 seconds
+        setInterval(loadDatabaseStats, 30000);
+    </script>
+</body>
+</html>
