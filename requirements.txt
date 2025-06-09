@@ -1,0 +1,10 @@
+apscheduler
+flask-sqlalchemy
+flask
+paramiko
+python-dateutil
+requests
+trafilatura
+psycopg2-binary
+sqlalchemy
+python-dotenv

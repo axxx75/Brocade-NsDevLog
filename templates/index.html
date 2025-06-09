@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Switch Log Analyzer</title>
+    <link href="static/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand { font-weight: bold; }
+        .card { box-shadow: 0 2px 4px rgba(0,0,0,0.1); border: none; }
+        .table-responsive { max-height: 600px; overflow-y: auto; }
+        .table thead th { 
+            position: sticky; 
+            top: 0; 
+            background: white; 
+            z-index: 10; 
+            cursor: pointer;
+            user-select: none;
+        }
+        .table thead th:hover { background-color: #f8f9fa; }
+        .sort-icon { margin-left: 5px; color: #6c757d; }
+        .timestamp-col { min-width: 180px; font-family: monospace; }
+        .wwn-col { font-family: monospace; font-size: 0.9em; }
+        .pagination { justify-content: center; }
+        .alert { margin-bottom: 0; }
+        .switch-checkbox { margin: 5px 0; }
+        .dropdown-menu { max-height: 300px; overflow-y: auto; }
+        .collection-status { position: fixed; top: 10px; right: 10px; z-index: 1050; }
+        
+        /* Event Types Tooltip Styling */
+        .event-help-tooltip .tooltip-inner { 
+            max-width: 500px; 
+            text-align: left; 
+            background-color: #2c3e50;
+            font-size: 0.85rem;
+        }
+        .event-types-help div { 
+            margin: 3px 0; 
+            line-height: 1.4;
+        }
+        .event-types-help div:first-child { 
+            margin-bottom: 8px; 
+            border-bottom: 1px solid #34495e; 
+            padding-bottom: 5px;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Collection Status Alert -->
+    <div id="collectionAlert" class="collection-status" style="display: none;">
+        <div class="alert alert-info alert-dismissible fade show" role="alert">
+            <i class="fas fa-cog fa-spin me-2"></i>
+            <strong>Collection in Progress</strong>
+            <span id="collectionMessage">Processing switch logs...</span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-network-wired me-2"></i>
+                Switch Log Analyzer
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/">
+                            <i class="fas fa-search me-1"></i>
+                            Database Search
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/scheduler">
+                            <i class="fas fa-clock me-1"></i>
+                            Scheduler
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/maintenance">
+                            <i class="fas fa-tools me-1"></i>
+                            Maintenance
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="https://github.com/axxx75/Brocade-NsDevLog/blob/main/README.md" target="_blank">
+                            <i class="fas fa-question-circle me-1"></i>
+                            Help
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="showAboutModal()">
+                            <i class="fas fa-info-circle me-1"></i>
+                            About
+                        </a>
+                    </li>
+                </ul>
+                <div class="d-flex gap-2">
+                    <button id="newCollection" class="btn btn-primary btn-sm">
+                        <i class="fas fa-play me-1"></i>
+                        New Collection
+                    </button>
+                    <button id="exportResults" class="btn btn-success btn-sm">
+                        <i class="fas fa-download me-1"></i>
+                        Export CSV
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <!-- Search Filters -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-filter me-2"></i>
+                            Search Filters
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Search Form -->
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">WWN</label>
+                                <input type="text" class="form-control" id="searchWwn" placeholder="Enter WWN...">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Switches (Multiple)</label>
+                                <div class="dropdown">
+                                    <button class="btn btn-outline-secondary dropdown-toggle w-100" type="button" id="switchDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <span id="switchSelection">All Switches</span>
+                                    </button>
+                                    <ul class="dropdown-menu w-100" id="switchCheckboxList">
+                                        <!-- Populated dynamically -->
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">
+                                    Event Type
+                                    <span class="ms-1" data-bs-toggle="tooltip" data-bs-placement="top" 
+                                          data-bs-html="true" data-bs-custom-class="event-help-tooltip"
+                                          title="<div class='event-types-help'>
+                                                    <div><strong>Event Types:</strong></div>
+                                                    <div>• <strong>Register:</strong> Entry created by explicit NS registration</div>
+                                                    <div>• <strong>Deregister:</strong> Entry deleted by explicit NS deregistration</div>
+                                                    <div>• <strong>Device Add:</strong> Entry created based on UPD Area</div>
+                                                    <div>• <strong>Device Del:</strong> Entry deleted based on UPD Delete</div>
+                                                    <div>• <strong>Device Add (Query):</strong> Entry created by NS query from the device</div>
+                                                    <div>• <strong>Port Del:</strong> Entries deleted based on DEL Area</div>
+                                                    <div>• <strong>Dup WWN:</strong> Entry deleted based on Duplicate WWN</div>
+                                                    <div>• <strong>Switch Offline:</strong> Entries deleted due to switch offline</div>
+                                                    <div>• <strong>FPORT Entry:</strong> Entry created by F-Port SCN</div>
+                                                    <div>• <strong>Device marked SD:</strong> Entry created when a device is marked Slow Drain</div>
+                                                    <div>• <strong>Device cleared SD:</strong> Entry created when Slow Drain condition is cleared for a device</div>
+                                                 </div>">
+                                        <i class="fas fa-question-circle text-muted" style="cursor: pointer; font-size: 0.9em;"></i>
+                                    </span>
+                                </label>
+                                <select class="form-control" id="searchEvent">
+                                    <option value="">All Events</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Context</label>
+                                <select class="form-control" id="searchContext">
+                                    <option value="">All Contexts</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row g-3 mt-2">
+                            <div class="col-md-3">
+                                <label class="form-label">Alias</label>
+                                <input type="text" class="form-control" id="searchAlias" placeholder="Enter alias...">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Node Symbol</label>
+                                <input type="text" class="form-control" id="searchNodeSymbol" placeholder="Enter node symbol...">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Date From</label>
+                                <input type="date" class="form-control" id="searchDateFrom">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Date To</label>
+                                <input type="date" class="form-control" id="searchDateTo">
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <button type="button" class="btn btn-primary" onclick="performSearch()">
+                                    <i class="fas fa-search me-1"></i>Search
+                                </button>
+                                <button type="button" class="btn btn-secondary ms-2" id="clearSearch">
+                                    <i class="fas fa-times me-1"></i>Clear
+                                </button>
+                                <button type="button" class="btn btn-info ms-2" onclick="loadTodayEntries()">
+                                    <i class="fas fa-calendar-day me-1"></i>Today's Entries
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-table me-2"></i>
+                            Log Entries
+                        </h5>
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="badge bg-primary" id="resultCount">0 results</span>
+                            <span class="text-muted small" id="showingInfo">Showing 0-0 of 0 entries</span>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="timestamp-col" onclick="sortTable('timestamp')">
+                                            Timestamp<i class="fas fa-sort sort-icon"></i>
+                                        </th>
+                                        <th onclick="sortTable('switch_name')">
+                                            Switch<i class="fas fa-sort sort-icon"></i>
+                                        </th>
+                                        <th onclick="sortTable('port_info')">
+                                            Port/Slot<i class="fas fa-sort sort-icon"></i>
+                                        </th>
+                                        <th onclick="sortTable('context')">
+                                            Context<i class="fas fa-sort sort-icon"></i>
+                                        </th>
+                                        <th onclick="sortTable('event_type')">
+                                            Event Type<i class="fas fa-sort sort-icon"></i>
+                                        </th>
+                                        <th class="wwn-col" onclick="sortTable('wwn')">
+                                            WWN<i class="fas fa-sort sort-icon"></i>
+                                        </th>
+                                        <th onclick="sortTable('alias')">
+                                            Alias<i class="fas fa-sort sort-icon"></i>
+                                        </th>
+                                        <th onclick="sortTable('node_symbol')">
+                                            Node Symbol<i class="fas fa-sort sort-icon"></i>
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody id="resultsTable">
+                                    <tr>
+                                        <td colspan="8" class="text-center text-muted py-4">
+                                            <i class="fas fa-database fa-2x mb-2"></i><br>
+                                            Loading recent entries...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <nav aria-label="Results pagination">
+                            <ul class="pagination pagination-sm mb-0" id="pagination">
+                                <!-- Pagination controls populated dynamically -->
+                            </ul>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Collection Modal -->
+    <div class="modal fade" id="collectionModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Start New Collection</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Username</label>
+                        <input type="text" class="form-control" id="modalUsername" placeholder="Enter username">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Password</label>
+                        <input type="password" class="form-control" id="modalPassword" placeholder="Enter password">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="startCollectionWithCreds">Start Collection</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="static/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentPage = 1;
+        let pageSize = 100;
+        let totalEntries = 0;
+        let selectedSwitches = [];
+        let sortColumn = 'timestamp';
+        let sortDirection = 'desc';
+        let lastSearchParams = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Bootstrap tooltips
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl);
+            });
+            
+            loadFilterOptions();
+            loadRecentEntries(); // Load recent entries by default
+            setupEventListeners();
+            checkCollectionStatus();
+            setInterval(checkCollectionStatus, 5000);
+        });
+
+        function setupEventListeners() {
+            document.getElementById('clearSearch').addEventListener('click', clearSearch);
+            document.getElementById('newCollection').addEventListener('click', showCollectionModal);
+            document.getElementById('startCollectionWithCreds').addEventListener('click', startCollectionWithCredentials);
+            document.getElementById('exportResults').addEventListener('click', exportResults);
+        }
+
+        function showCollectionModal() {
+            const modal = new bootstrap.Modal(document.getElementById('collectionModal'));
+            modal.show();
+        }
+
+        async function startCollectionWithCredentials() {
+            const username = document.getElementById('modalUsername').value.trim();
+            const password = document.getElementById('modalPassword').value.trim();
+            
+            if (!username || !password) {
+                alert('Please provide both username and password');
+                return;
+            }
+            
+            const modal = bootstrap.Modal.getInstance(document.getElementById('collectionModal'));
+            modal.hide();
+            
+            document.getElementById('modalUsername').value = '';
+            document.getElementById('modalPassword').value = '';
+            
+            // Disable collection button immediately
+            updateCollectionButtonState(true);
+            
+            try {
+                const response = await fetch('/api/collect-with-credentials', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showAlert('Collection started successfully!', 'success');
+                    // Start polling for status updates
+                    checkCollectionStatus();
+                } else {
+                    showAlert('Failed to start collection: ' + result.error, 'danger');
+                    // Re-enable button if failed to start
+                    updateCollectionButtonState(false);
+                }
+            } catch (error) {
+                showAlert('Error starting collection: ' + error.message, 'danger');
+                // Re-enable button on error
+                updateCollectionButtonState(false);
+            }
+        }
+
+        async function loadFilterOptions() {
+            try {
+                const response = await fetch('/api/db/stats');
+                const data = await response.json();
+                
+                if (data.switches) {
+                    populateSwitchCheckboxes(data.switches.map(s => s.name));
+                }
+                if (data.top_events) {
+                    populateSelect('searchEvent', data.top_events.map(e => e.event));
+                }
+                if (data.contexts) {
+                    populateSelect('searchContext', data.contexts.map(c => c.context));
+                }
+            } catch (error) {
+                console.error('Failed to load filter options:', error);
+            }
+        }
+
+        function populateSwitchCheckboxes(switches) {
+            const container = document.getElementById('switchCheckboxList');
+            container.innerHTML = switches.map(switchName => `
+                <li class="dropdown-item switch-checkbox">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="${switchName}" 
+                               id="switch_${switchName}" onchange="updateSwitchSelection()">
+                        <label class="form-check-label" for="switch_${switchName}">
+                            ${switchName}
+                        </label>
+                    </div>
+                </li>
+            `).join('');
+        }
+
+        function updateSwitchSelection() {
+            const checkboxes = document.querySelectorAll('#switchCheckboxList input[type="checkbox"]');
+            selectedSwitches = Array.from(checkboxes)
+                .filter(cb => cb.checked)
+                .map(cb => cb.value);
+                
+            const selectionText = selectedSwitches.length === 0 ? 'All Switches' : 
+                                selectedSwitches.length === 1 ? selectedSwitches[0] : 
+                                `${selectedSwitches.length} switches selected`;
+            
+            document.getElementById('switchSelection').textContent = selectionText;
+        }
+
+        function populateSelect(elementId, options) {
+            const select = document.getElementById(elementId);
+            const firstOption = select.querySelector('option').outerHTML;
+            select.innerHTML = firstOption + options.map(opt => 
+                `<option value="${opt}">${opt}</option>`
+            ).join('');
+        }
+
+        async function loadTodayEntries() {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('searchDateFrom').value = today;
+            document.getElementById('searchDateTo').value = today;
+            
+            sortColumn = 'timestamp';
+            sortDirection = 'desc';
+            currentPage = 1;
+            
+            await performSearch();
+        }
+
+        async function loadRecentEntries() {
+            // Clear all filters and load most recent entries
+            document.getElementById('searchWwn').value = '';
+            document.getElementById('searchEvent').value = '';
+            document.getElementById('searchContext').value = '';
+            document.getElementById('searchDateFrom').value = '';
+            document.getElementById('searchDateTo').value = '';
+            
+            // Clear switch checkboxes
+            document.querySelectorAll('#switchCheckboxList input[type="checkbox"]').forEach(cb => {
+                cb.checked = false;
+            });
+            updateSwitchSelection();
+            
+            sortColumn = 'timestamp';
+            sortDirection = 'desc';
+            currentPage = 1;
+            
+            await performSearch();
+        }
+
+        async function performSearch() {
+            const wwn = document.getElementById('searchWwn').value.trim();
+            const alias = document.getElementById('searchAlias').value.trim();
+            const nodeSymbol = document.getElementById('searchNodeSymbol').value.trim();
+            const eventType = document.getElementById('searchEvent').value;
+            const context = document.getElementById('searchContext').value;
+            const dateFrom = document.getElementById('searchDateFrom').value;
+            const dateTo = document.getElementById('searchDateTo').value;
+
+            const params = new URLSearchParams();
+            if (wwn) params.append('wwn', wwn);
+            if (alias) params.append('alias', alias);
+            if (nodeSymbol) params.append('node_symbol', nodeSymbol);
+            if (selectedSwitches.length > 0) params.append('switches', selectedSwitches.join(','));
+            if (eventType) params.append('event', eventType);
+            if (context) params.append('context', context);
+            if (dateFrom) params.append('date_from', dateFrom);
+            if (dateTo) params.append('date_to', dateTo);
+            
+            params.append('page', currentPage);
+            params.append('page_size', pageSize);
+            params.append('sort_column', sortColumn);
+            params.append('sort_direction', sortDirection);
+
+            lastSearchParams = params;
+
+            try {
+                const response = await fetch(`/api/db/search?${params}`);
+                const data = await response.json();
+                
+                console.log('Search response:', data); // Debug logging
+                
+                if (data.error) {
+                    showAlert('Search failed: ' + data.error, 'danger');
+                    return;
+                }
+                
+                if (data.entries !== undefined) {
+                    const entries = Array.isArray(data.entries) ? data.entries : [];
+                    const total = parseInt(data.total || data.total_count) || 0;
+                    
+                    console.log(`Found ${entries.length} entries, total: ${total}`); // Debug logging
+                    
+                    displayResults(entries);
+                    totalEntries = total;
+                    updatePagination();
+                    updateResultInfo();
+                    updateSortIcons();
+                } else {
+                    console.error('Invalid response format:', data);
+                    showAlert('Search failed: Invalid response format', 'danger');
+                }
+            } catch (error) {
+                console.error('Search failed:', error);
+                showAlert('Search failed: ' + error.message, 'danger');
+            }
+        }
+
+        function displayResults(entries) {
+            const tbody = document.getElementById('resultsTable');
+            
+            if (!entries || entries.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            <i class="fas fa-search fa-2x mb-2"></i><br>
+                            No entries found matching your search criteria
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            try {
+                tbody.innerHTML = entries.map(entry => `
+                    <tr>
+                        <td class="timestamp-col">${formatTimestamp(entry.timestamp)}</td>
+                        <td>${entry.switch_name || ''}</td>
+                        <td>${entry.port_info || ''}</td>
+                        <td>${entry.context !== undefined ? entry.context : ''}</td>
+                        <td>${entry.event_type || ''}</td>
+                        <td class="wwn-col">${entry.wwn || ''}</td>
+                        <td>${entry.alias || 'N/A'}</td>
+                        <td>${entry.node_symbol || 'N/A'}</td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('Error displaying results:', error);
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="text-center text-danger py-4">
+                            <i class="fas fa-exclamation-triangle fa-2x mb-2"></i><br>
+                            Error displaying results: ${error.message}
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        function sortTable(column) {
+            if (sortColumn === column) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn = column;
+                sortDirection = 'asc';
+            }
+            
+            currentPage = 1;
+            performSearch();
+        }
+
+        function updateSortIcons() {
+            document.querySelectorAll('.sort-icon').forEach(icon => {
+                icon.className = 'fas fa-sort sort-icon';
+            });
+            
+            const activeHeader = document.querySelector(`th[onclick="sortTable('${sortColumn}')"] .sort-icon`);
+            if (activeHeader) {
+                activeHeader.className = `fas fa-sort-${sortDirection === 'asc' ? 'up' : 'down'} sort-icon`;
+            }
+        }
+
+        function updatePagination() {
+            const totalPages = Math.ceil(totalEntries / pageSize);
+            const pagination = document.getElementById('pagination');
+            
+            if (totalPages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+            
+            let html = '';
+            
+            // Previous button
+            if (currentPage > 1) {
+                html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${currentPage - 1})">Previous</a></li>`;
+            }
+            
+            // Page numbers
+            const startPage = Math.max(1, currentPage - 2);
+            const endPage = Math.min(totalPages, currentPage + 2);
+            
+            if (startPage > 1) {
+                html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(1)">1</a></li>`;
+                if (startPage > 2) {
+                    html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+                }
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                html += `<li class="page-item ${i === currentPage ? 'active' : ''}">
+                    <a class="page-link" href="#" onclick="changePage(${i})">${i}</a>
+                </li>`;
+            }
+            
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+                }
+                html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${totalPages})">${totalPages}</a></li>`;
+            }
+            
+            // Next button
+            if (currentPage < totalPages) {
+                html += `<li class="page-item"><a class="page-link" href="#" onclick="changePage(${currentPage + 1})">Next</a></li>`;
+            }
+            
+            pagination.innerHTML = html;
+        }
+
+        function changePage(page) {
+            currentPage = page;
+            performSearch();
+        }
+
+        function updateResultInfo() {
+            const total = totalEntries || 0;
+            const start = total > 0 ? (currentPage - 1) * pageSize + 1 : 0;
+            const end = total > 0 ? Math.min(currentPage * pageSize, total) : 0;
+            
+            document.getElementById('resultCount').textContent = `${total} results`;
+            document.getElementById('showingInfo').textContent = `Showing ${start}-${end} of ${total} entries`;
+        }
+
+        function formatTimestamp(timestamp) {
+            if (!timestamp) return '';
+            const date = new Date(timestamp);
+            return date.toLocaleString();
+        }
+
+        function clearSearch() {
+            document.getElementById('searchWwn').value = '';
+            document.getElementById('searchAlias').value = '';
+            document.getElementById('searchNodeSymbol').value = '';
+            document.getElementById('searchEvent').value = '';
+            document.getElementById('searchContext').value = '';
+            document.getElementById('searchDateFrom').value = '';
+            document.getElementById('searchDateTo').value = '';
+            
+            // Clear switch checkboxes
+            document.querySelectorAll('#switchCheckboxList input[type="checkbox"]').forEach(cb => {
+                cb.checked = false;
+            });
+            updateSwitchSelection();
+            
+            sortColumn = 'timestamp';
+            sortDirection = 'desc';
+            currentPage = 1;
+            
+            const tbody = document.getElementById('resultsTable');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="text-center text-muted py-4">
+                        <i class="fas fa-search fa-2x mb-2"></i><br>
+                        Use the search form above to find log entries
+                    </td>
+                </tr>
+            `;
+            
+            document.getElementById('resultCount').textContent = '0 results';
+            document.getElementById('showingInfo').textContent = 'Showing 0-0 of 0 entries';
+            document.getElementById('pagination').innerHTML = '';
+        }
+
+        async function checkCollectionStatus() {
+            try {
+                const response = await fetch('/api/collection/status');
+                const status = await response.json();
+                
+                // Update collection button state based on status
+                updateCollectionButtonState(status.is_running);
+                
+                // Show/hide collection progress alert
+                const alert = document.getElementById('collectionAlert');
+                const messageElement = document.getElementById('collectionMessage');
+                
+                if (alert && status.is_running) {
+                    const message = status.collection_id ? 
+                        `Collection ${status.collection_id.substring(0, 8)}... in progress (${status.duration_minutes || 0} min)` :
+                        'Processing switch logs...';
+                    if (messageElement) {
+                        messageElement.textContent = message;
+                    }
+                    alert.style.display = 'block';
+                } else if (alert) {
+                    alert.style.display = 'none';
+                }
+            } catch (error) {
+                console.debug('Collection status check failed:', error);
+                // Re-enable button if status check fails
+                updateCollectionButtonState(false);
+            }
+        }
+        
+        function updateCollectionButtonState(isRunning) {
+            const button = document.getElementById('newCollection');
+            const buttonText = button.querySelector('.btn-text') || button;
+            const spinner = button.querySelector('.spinner-border');
+            
+            if (isRunning) {
+                button.disabled = true;
+                button.classList.remove('btn-primary');
+                button.classList.add('btn-warning');
+                buttonText.textContent = 'Collection Running...';
+                
+                // Add spinner if not present
+                if (!spinner) {
+                    const spinnerHtml = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>';
+                    button.innerHTML = spinnerHtml + '<span class="btn-text">Collection Running...</span>';
+                }
+            } else {
+                button.disabled = false;
+                button.classList.remove('btn-warning');
+                button.classList.add('btn-primary');
+                button.innerHTML = '<i class="fas fa-download me-2"></i>New Collection';
+            }
+        }
+
+        async function exportResults() {
+            try {
+                const wwn = document.getElementById('searchWwn').value.trim();
+                const alias = document.getElementById('searchAlias').value.trim();
+                const nodeSymbol = document.getElementById('searchNodeSymbol').value.trim();
+                const eventType = document.getElementById('searchEvent').value;
+                const context = document.getElementById('searchContext').value;
+                const dateFrom = document.getElementById('searchDateFrom').value;
+                const dateTo = document.getElementById('searchDateTo').value;
+
+                const params = new URLSearchParams();
+                if (wwn) params.append('wwn', wwn);
+                if (alias) params.append('alias', alias);
+                if (nodeSymbol) params.append('node_symbol', nodeSymbol);
+                if (selectedSwitches.length > 0) params.append('switches', selectedSwitches.join(','));
+                if (eventType) params.append('event', eventType);
+                if (context) params.append('context', context);
+                if (dateFrom) params.append('date_from', dateFrom);
+                if (dateTo) params.append('date_to', dateTo);
+                params.append('page_size', '0'); // Export all matching results without pagination
+
+                const response = await fetch(`/api/db/search?${params.toString()}`);
+                const data = await response.json();
+                
+                const entries = data.entries || data.results || [];
+                if (entries && entries.length > 0) {
+                    // Convert to CSV
+                    const headers = ['Timestamp', 'Switch', 'Context', 'Event Type', 'WWN', 'Port/Slot', 'Alias', 'Node Symbol'];
+                    const csvContent = [
+                        headers.join(','),
+                        ...entries.map(row => [
+                            `"${row.timestamp}"`,
+                            `"${row.switch_name}"`,
+                            row.context || '',
+                            `"${row.event_type || ''}"`,
+                            `"${row.wwn || ''}"`,
+                            `"${row.port_info || ''}"`,
+                            `"${row.alias || ''}"`,
+                            `"${row.node_symbol || ''}"`
+                        ].join(','))
+                    ].join('\n');
+                    
+                    // Download CSV
+                    const blob = new Blob([csvContent], { type: 'text/csv' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `switch_logs_${new Date().toISOString().split('T')[0]}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    showAlert(`Exported ${entries.length} entries to CSV`, 'success');
+                } else {
+                    showAlert('No data to export', 'warning');
+                }
+            } catch (error) {
+                showAlert('Failed to export data: ' + error.message, 'danger');
+            }
+        }
+
+        function showAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            document.body.insertBefore(alertDiv, document.body.firstChild);
+            
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+
+        function showAboutModal() {
+            const modal = new bootstrap.Modal(document.getElementById('aboutModal'));
+            modal.show();
+        }
+    </script>
+
+    <!-- About Modal -->
+    <div class="modal fade" id="aboutModal" tabindex="-1" aria-labelledby="aboutModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="aboutModalLabel">
+                        <i class="fas fa-info-circle me-2"></i>
+                        About Switch Log Analyzer
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-4 text-center">
+                            <i class="fas fa-network-wired fa-4x text-primary mb-3"></i>
+                            <h6>FC Login/Logout Analysis</h6>
+                        </div>
+                        <div class="col-md-8">
+                            <h6>Sistema Avanzato di Analisi Log</h6>
+                            <p class="text-muted">
+                                Un sistema professionale per l'analisi dei log di switch Brocade che raccoglie, 
+                                elabora e analizza eventi WWN attraverso connessioni SSH automatizzate.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-cogs me-2"></i>Funzionalità Principali</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="fas fa-check text-success me-2"></i>Raccolta automatizzata log switch</li>
+                                <li><i class="fas fa-check text-success me-2"></i>Processing parallelo multi-switch</li>
+                                <li><i class="fas fa-check text-success me-2"></i>Logica NPIV intelligente</li>
+                                <li><i class="fas fa-check text-success me-2"></i>Scheduling automatico</li>
+                                <li><i class="fas fa-check text-success me-2"></i>Database PostgreSQL ottimizzato</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-chart-line me-2"></i>Performance</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="fas fa-bolt text-warning me-2"></i>Lookup device sub-millisecondo</li>
+                                <li><i class="fas fa-bolt text-warning me-2"></i>Cache LRU 10K entries</li>
+                                <li><i class="fas fa-bolt text-warning me-2"></i>Fino a 8 worker paralleli</li>
+                                <li><i class="fas fa-bolt text-warning me-2"></i>Indici database ottimizzati</li>
+                                <li><i class="fas fa-bolt text-warning me-2"></i>Export CSV streaming</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h6><i class="fas fa-code me-2"></i>Architettura Tecnica</h6>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="card border-primary h-100">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-globe text-primary fa-2x mb-2"></i>
+                                            <h6 class="card-title">Frontend</h6>
+                                            <small class="text-muted">Bootstrap 5 + JavaScript</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card border-success h-100">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-server text-success fa-2x mb-2"></i>
+                                            <h6 class="card-title">Backend</h6>
+                                            <small class="text-muted">Flask + SQLAlchemy</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card border-warning h-100">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-database text-warning fa-2x mb-2"></i>
+                                            <h6 class="card-title">Database</h6>
+                                            <small class="text-muted">PostgreSQL + SQLite</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <div class="me-auto">
+                        <small class="text-muted">
+                            <i class="fas fa-calendar me-1"></i>
+                            Al.Fa Tech - Versione 2.0 - Giugno 2025
+                        </small>
+                    </div>
+                    <a href="https://github.com/axxx75/Brocade-NsDevLog" target="_blank" class="btn btn-outline-primary btn-sm">
+                        <i class="fab fa-github me-1"></i>
+                        GitHub Repository
+                    </a>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
