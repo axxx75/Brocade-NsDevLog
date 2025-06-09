@@ -1,5 +1,4 @@
 # Switch Log Analyzer
-
 Un sistema avanzato di analisi log per switch fibrechannel Brocade che raccoglie, elabora e analizza i log di eventi "nsdevlog" attraverso connessioni SSH automatizzate con funzionalità di scheduling intelligente e lookup ottimizzato.
 
 # NSDevLog
@@ -206,7 +205,7 @@ ccm:santgtccm4:gen7
 ccm:santgtccm6:gen7
 ```
 
-### Environment Variables
+### Environment Variables (`.env`)
 ```bash
 DATABASE_URL=postgresql://user:pass@host:port/database
 SWITCH_USERNAME=username
@@ -295,3 +294,7 @@ dettagliare
 
 
 Questa documentazione fornisce una panoramica completa dell'architettura e delle funzionalità del Switch Log Analyzer, facilitando manutenzione, troubleshooting e future estensioni del sistema.
+
+### Contributing
+Pull request e issue sono benvenute! Per segnalare problemi o proporre funzionalità, apri una issue o unisciti allo sviluppo.
+
