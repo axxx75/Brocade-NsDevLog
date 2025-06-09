@@ -1,5 +1,11 @@
-# Switch Log Analyzer
+# Brocade NsDevLog (Switch Log Analyzer)
 Un sistema avanzato di analisi log per switch fibrechannel Brocade che raccoglie, elabora e analizza i log di eventi "nsdevlog" attraverso connessioni SSH automatizzate con funzionalità di scheduling intelligente e lookup ottimizzato.
+
+## 📚 Documentazione
+Questa documentazione fornisce una panoramica completa dell'architettura e delle funzionalità del Switch Log Analyzer, facilitando manutenzione, troubleshooting e future estensioni del sistema.
+
+- [Project Structure](PROJECT_STRUCTURE.md)
+- [Database](DATABASE.md)
 
 # NSDevLog
 NSDevLog  (Name Server Device Log) è un componente dei Fibre Channel switch Brocade, utilizzato per monitorare i dispositivi che effettuano login o logout nella fabric SAN. 
@@ -118,36 +124,12 @@ Automatic Collection Launch
 Result Logging & Notification
 ```
 
-## 📊 Database Schema
-
-### LogEntry (Tabella Principale)
-- **Indici ottimizzati**: timestamp+switch, WWN+timestamp, alias, node_symbol
-- **Campi chiave**: timestamp, switch_name, context, event_type, wwn, alias, node_symbol
-- **Performance**: Supporta milioni di record con query sub-secondo
-
-```sql
--- Indici compositi per performance
-CREATE INDEX idx_timestamp_switch ON log_entries(timestamp, switch_name);
-CREATE INDEX idx_wwn_timestamp ON log_entries(wwn, timestamp);
-CREATE INDEX idx_collection_switch ON log_entries(collection_id, switch_name);
-```
-
-### CollectionRun (Tracking Esecuzioni)
-- **Status tracking**: running → completed/failed
-- **Metadata**: switch processati, entry totali/nuove, tempi esecuzione
-- **Error handling**: Messaggi errore dettagliati
-
-### ScheduledJob (Jobs Persistenti)
-- **Cron scheduling**: Espressioni cron per automazione
-- **Credential management**: Username/password per switch
-- **Enable/disable**: Controllo attivazione jobs
-
 ## 🎯 Funzionalità Avanzate
 
 ### Intelligent NPIV Handling
 Il sistema riconosce automaticamente i dispositivi NPIV (N_Port ID Virtualization):
 - **Virtual WWN**: Quando WWN ≠ physicalPortWwn, restituisce il symbolicName della porta fisica
-- **Physical WWN**: Utilizza direttamente il symbolicName della porta virtuale
+- **Physical WWN**: Utilizza direttamente il symbolicName della porta fisica
 - **Performance**: Lookup cache con LRU per velocità ottimale
 
 ### Parallel Processing
@@ -285,16 +267,11 @@ vi switches.conf
 dettagliare
 ```
 
-
 ### Common Issues
 - **SSH timeouts**: Verifica connettività e credenziali switch
 - **Database locks**: Monitor connessioni attive PostgreSQL  
 - **Memory usage**: Monitora utilizzo durante raccolte grandi
 - **Stuck collections**: Usa force cleanup per sbloccare
 
-
-Questa documentazione fornisce una panoramica completa dell'architettura e delle funzionalità del Switch Log Analyzer, facilitando manutenzione, troubleshooting e future estensioni del sistema.
-
-### Contributing
+## 🙌 Contributing
 Pull request e issue sono benvenute! Per segnalare problemi o proporre funzionalità, apri una issue o unisciti allo sviluppo.
-
