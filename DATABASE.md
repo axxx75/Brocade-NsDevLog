@@ -74,6 +74,7 @@ with app.app_context():
 Assicurati che l’utente sia lo stesso definito nella configurazione dell’app, nel file 
 
 
+
 ## 📊 Database Schema
 
 ### LogEntry (Tabella Principale)
@@ -88,12 +89,12 @@ CREATE INDEX idx_wwn_timestamp ON log_entries(wwn, timestamp);
 CREATE INDEX idx_collection_switch ON log_entries(collection_id, switch_name);
 ```
 
-### CollectionRun (Tracking Esecuzioni)
+### CollectionRun (Tabella Tracking Esecuzioni)
 - **Status tracking**: running → completed/failed
 - **Metadata**: switch processati, entry totali/nuove, tempi esecuzione
 - **Error handling**: Messaggi errore dettagliati
 
-### ScheduledJob (Jobs Persistenti)
+### ScheduledJob (Tabella Jobs Persistenti)
 - **Cron scheduling**: Espressioni cron per automazione
 - **Credential management**: Username/password per switch
 - **Enable/disable**: Controllo attivazione jobs
