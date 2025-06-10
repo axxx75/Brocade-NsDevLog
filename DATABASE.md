@@ -1,3 +1,12 @@
+## 🛠️ Requisiti
+
+Assicurati che PostgreSQL sia installato nel sistema e attivo:
+```bash
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+sudo systemctl status postgresql
+```
+
 ## 📊 Database Schema
 
 ### LogEntry (Tabella Principale)
