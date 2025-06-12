@@ -8,9 +8,8 @@ Questa documentazione fornisce una panoramica completa dell'architettura e delle
 - [Database](DATABASE.md)
 
 # NSDevLog
-NSDevLog  (Name Server Device Log) è un componente dei Fibre Channel switch Brocade, utilizzato per monitorare i dispositivi che effettuano login o logout nella fabric SAN. 
-E' un registro locale degli eventi relativi ai dispositivi (N_Ports) che si connettono o disconnettono dallo switch. 
-Tool di debug per sapere quando un host o storage si connette o disconnette dalla san.
+NSDevLog  (Name Server Device Log) è un comando dei FOS degli switch Brocade, utilizzato per monitorare i dispositivi nella fabric SAN. 
+E' un registro locale degli eventi relativi ai dispositivi (N_Ports) che si connettono o disconnettono dallo switch (PLOGIN/PLOGOUT). 
 Tiene traccia delle modifiche al database del Name Server (NS), il servizio che mappa i dispositivi nella fabric.
 
 ## 🏗️ Architettura del Sistema
@@ -130,7 +129,7 @@ Result Logging & Notification
 Il sistema riconosce automaticamente i dispositivi NPIV (N_Port ID Virtualization):
 - **Virtual WWN**: Quando WWN ≠ physicalPortWwn, restituisce il symbolicName della porta fisica
 - **Physical WWN**: Utilizza direttamente il symbolicName della porta fisica
-- **Performance**: Lookup cache con LRU per velocità ottimale
+- **Performance**: Lookup cache con LRU per ottimizare i tempi di ricerca
 
 ### Parallel Processing
 - **4-8 worker threads**: Elaborazione simultanea di più switch
