@@ -9,16 +9,10 @@
 | **final_working_collector.py** | Parallel Collection Engine | `get_thread_db_session()`, `process_single_switch()`, `run_simple_collection()` | Parallel 4-switch log collection with thread-safe PostgreSQL integration and error isolation |
 | **device_lookup_optimized.py** | Authentic Device Lookup | `DeviceLookupOptimized`, `extract_slot_port_from_entry()`, `lookup_alias_and_node_symbol()`, `refresh_device_port_data()` | SQLite-indexed device lookup with authentic SanNav container data access, LRU cache, and NPIV intelligence |
 | **simple_switch_collector.py** | SSH Collection Base | `SimpleLogCollector`, `connect_to_switch()`, `collect_from_context_simple()`, `parse_log_line()`, `fix_timestamps_with_years()` | Individual switch SSH connection handler with intelligent timestamp processing and log parsing |
-| **production_scheduler_config.py** | Single-Worker Scheduler | `ProductionSchedulerManager` | Optimized scheduler manager for Gunicorn single-worker configuration, eliminates multi-worker conflicts |
 | **config.py** | Application Configuration | `Config`, `Config.load_switches()` | Environment-based configuration management with switch inventory loading |
-| **gunicorn_config.py** | Production WSGI Config | Various configuration functions and hooks | Single-worker Gunicorn configuration optimized for scheduler stability and production reliability |
+| **simple_direct_scheduler.py** | Single-Worker Scheduler | `on_starting(server)`,`when_ready(server)`, `worker_int(worker)`, `pre_fork(server, worker)`, `post_fork(server, worker)`, `worker_abort(worker)`  | Optimized scheduler manager for Gunicorn single-worker configuration, eliminates multi-worker conflicts |
+| **simple_gunicorn_config.py** | Production WSGI Config | Main Class: DirectScheduler, Key Methods:  | Single-worker Gunicorn configuration optimized for scheduler stability and production reliability |
 
-## Security & Deployment
-
-| File | Purpose | Description |
-|------|---------|-------------|
-| **switches.conf** | Switch Inventory | Network switch hostnames list for data collection (one per line) |
-| **pyproject.toml** | Python Dependencies | Package management with Flask, SQLAlchemy, Paramiko, APScheduler |
 
 ## Template Files
 
