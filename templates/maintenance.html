@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Maintenance - Switch Log Analyzer</title>
+    <link href="static/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .navbar-brand { font-weight: bold; }
+        .stats-card { transition: transform 0.2s; }
+        .stats-card:hover { transform: translateY(-2px); }
+        .metric-value { font-size: 2rem; font-weight: bold; }
+        .card { box-shadow: 0 2px 4px rgba(0,0,0,0.1); border: none; }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-network-wired me-2"></i>
+                Switch Log Analyzer
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">
+                            <i class="fas fa-search me-1"></i>
+                            Database Search
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/scheduler">
+                            <i class="fas fa-clock me-1"></i>
+                            Scheduler
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/maintenance">
+                            <i class="fas fa-tools me-1"></i>
+                            Maintenance
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="https://github.com/axxx75/Brocade-NsDevLog/blob/main/README.md" target="_blank">
+                            <i class="fas fa-question-circle me-1"></i>
+                            Help
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="showAboutModal()">
+                            <i class="fas fa-info-circle me-1"></i>
+                            About
+                        </a>
+                    </li>
+                </ul>
+                <div class="d-flex gap-2">
+                    <button id="newCollection" class="btn btn-primary btn-sm">
+                        <i class="fas fa-play me-1"></i>
+                        New Collection
+                    </button>
+                    <button id="cleanupCollections" class="btn btn-outline-warning btn-sm">
+                        <i class="fas fa-broom me-1"></i>
+                        Cleanup Stuck
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <!-- Database Statistics -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card stats-card bg-primary text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-database fa-2x mb-2"></i>
+                        <div class="metric-value" id="totalEntries">-</div>
+                        <div>Total Entries</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card bg-success text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-collection fa-2x mb-2"></i>
+                        <div class="metric-value" id="totalCollections">-</div>
+                        <div>Collections</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card bg-info text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-tags fa-2x mb-2"></i>
+                        <div class="metric-value" id="totalAliases">-</div>
+                        <div>Aliases</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card stats-card bg-warning text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-network-wired fa-2x mb-2"></i>
+                        <div class="metric-value" id="activeSwitches">-</div>
+                        <div>Active Switches</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Database Metrics -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card stats-card bg-dark text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-database fa-2x mb-2"></i>
+                        <div class="metric-value" id="databaseSize">-</div>
+                        <div>Database Size</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card stats-card bg-secondary text-white">
+                    <div class="card-body text-center">
+                        <i class="fas fa-search fa-2x mb-2"></i>
+                        <div class="metric-value" id="lookupCache">-</div>
+                        <div>Lookup Cache Hits</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Database Operations -->
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-download me-2"></i>
+                            Database Backup
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">Create a backup of the entire database including all log entries, collections, and aliases.</p>
+                        <button id="createBackup" class="btn btn-primary">
+                            <i class="fas fa-download me-1"></i>
+                            Create Backup
+                        </button>
+                        <div id="backupProgress" class="mt-3" style="display: none;">
+                            <div class="progress">
+                                <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <small class="text-muted">Creating backup...</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-upload me-2"></i>
+                            Database Restore
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">Restore database from a backup file. This will replace all current data.</p>
+                        <div class="mb-3">
+                            <label class="form-label">Select backup file:</label>
+                            <select class="form-control" id="backupFiles">
+                                <option value="">Loading backup files...</option>
+                            </select>
+                        </div>
+                        <button id="restoreBackup" class="btn btn-warning" disabled>
+                            <i class="fas fa-upload me-1"></i>
+                            Restore Database
+                        </button>
+                        <div id="restoreProgress" class="mt-3" style="display: none;">
+                            <div class="progress">
+                                <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <small class="text-muted">Restoring backup...</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Maintenance -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-broom me-2"></i>
+                            System Cleanup
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Temporary Files Cleanup</h6>
+                                <p class="text-muted">Remove temporary log files, debug files, and other system artifacts.</p>
+                                <button id="cleanupTempFiles" class="btn btn-outline-warning">
+                                    <i class="fas fa-trash-alt me-1"></i>
+                                    Clean Temporary Files
+                                </button>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Collection Cleanup</h6>
+                                <p class="text-muted">Clean up stuck or orphaned collection processes.</p>
+                                <button id="cleanupCollections" class="btn btn-outline-danger">
+                                    <i class="fas fa-broom me-1"></i>
+                                    Cleanup Stuck Collections
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Collections -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-history me-2"></i>
+                            Recent Collections
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="recentCollections">
+                            Loading...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Backups -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-archive me-2"></i>
+                            Recent Backups
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="recentBackups">
+                            Loading...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+
+        <!-- Status Messages -->
+        <div id="statusMessages" class="mt-4"></div>
+    </div>
+
+    <script src="static/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDatabaseStats();
+            loadRecentCollections();
+            loadRecentBackups();
+            loadBackupFiles();
+            loadDatabaseHealth();
+            
+            // Event listeners with null checks
+            const createBackupBtn = document.getElementById('createBackup');
+            if (createBackupBtn) createBackupBtn.addEventListener('click', createBackup);
+            
+            const restoreBackupBtn = document.getElementById('restoreBackup');
+            if (restoreBackupBtn) restoreBackupBtn.addEventListener('click', restoreBackup);
+            
+            const backupFilesSelect = document.getElementById('backupFiles');
+            if (backupFilesSelect) backupFilesSelect.addEventListener('change', toggleRestoreButton);
+            
+            // Header buttons
+            const exportResultsBtn = document.getElementById('exportResults');
+            if (exportResultsBtn) exportResultsBtn.addEventListener('click', exportResults);
+            
+            // System cleanup buttons
+            const cleanupTempBtn = document.getElementById('cleanupTempFiles');
+            if (cleanupTempBtn) cleanupTempBtn.addEventListener('click', cleanupTemporaryFiles);
+            
+            const cleanupCollectionsBtn = document.getElementById('cleanupCollections');
+            if (cleanupCollectionsBtn) cleanupCollectionsBtn.addEventListener('click', cleanupStuckCollections);
+            
+            // Check initial collection status
+            checkCollectionStatus();
+        });
+
+        // Load database statistics
+        async function loadDatabaseStats() {
+            try {
+                const response = await fetch('/api/db/stats');
+                const stats = await response.json();
+                
+                document.getElementById('totalEntries').textContent = stats.total_entries.toLocaleString();
+                document.getElementById('totalCollections').textContent = stats.total_collections;
+                document.getElementById('totalAliases').textContent = stats.total_aliases;
+                document.getElementById('activeSwitches').textContent = stats.active_switches;
+                
+                // Update database size if element exists
+                const dbSizeElement = document.getElementById('databaseSize');
+                if (dbSizeElement && stats.database_size) {
+                    dbSizeElement.textContent = stats.database_size;
+                }
+                
+                // Load device lookup statistics
+                loadDeviceLookupStats();
+            } catch (error) {
+                console.error('Failed to load database stats:', error);
+            }
+        }
+
+        // Load device lookup statistics
+        async function loadDeviceLookupStats() {
+            try {
+                const response = await fetch('/api/device-lookup/stats');
+                const stats = await response.json();
+                
+                const cacheElement = document.getElementById('lookupCache');
+                if (cacheElement) {
+                    // Usa la percentuale pre-calcolata dall'API
+                    if (stats.hit_rate_percent !== undefined) {
+                        const hitRate = stats.hit_rate_percent;
+                        const totalRequests = stats.total_cache_requests || 0;
+                        
+                        if (totalRequests > 0) {
+                            cacheElement.textContent = `${hitRate}%`;
+                            cacheElement.title = `${stats.cache_info.hits || 0} hits, ${stats.cache_info.misses || 0} misses (${totalRequests} total requests)`;
+                        } else {
+                            cacheElement.textContent = '0%';
+                            cacheElement.title = 'Cache not yet used - no lookup requests performed';
+                        }
+                    } else {
+                        // Fallback al calcolo originale
+                        const hitRate = stats.cache_info && stats.cache_info.hits ? 
+                            Math.round((stats.cache_info.hits / (stats.cache_info.hits + stats.cache_info.misses)) * 100) : 0;
+                        cacheElement.textContent = `${hitRate}%`;
+                    }
+                }
+                
+            } catch (error) {
+                console.debug('Device lookup stats not available:', error);
+                const cacheElement = document.getElementById('lookupCache');
+                if (cacheElement) {
+                    cacheElement.textContent = 'N/A';
+                    cacheElement.title = 'Device lookup statistics unavailable';
+                }
+            }
+        }
+
+        // Load recent collections
+        async function loadRecentCollections() {
+            try {
+                const response = await fetch('/api/db/collections');
+                const data = await response.json();
+                
+                const container = document.getElementById('recentCollections');
+                
+                if (data.collections && data.collections.length > 0) {
+                    const html = data.collections.map(collection => `
+                        <div class="d-flex justify-content-between align-items-center border-bottom py-2">
+                            <div>
+                                <div class="fw-medium">${collection.id}</div>
+                                <small class="text-muted">
+                                    ${new Date(collection.started_at).toLocaleString()} - 
+                                    ${collection.total_entries} entries
+                                </small>
+                            </div>
+                            <span class="badge bg-${collection.status === 'completed' ? 'success' : 
+                                collection.status === 'failed' ? 'danger' : 'warning'}">
+                                ${collection.status}
+                            </span>
+                        </div>
+                    `).join('');
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="text-muted">No collections found</div>';
+                }
+            } catch (error) {
+                console.error('Failed to load recent collections:', error);
+                document.getElementById('recentCollections').innerHTML = 
+                    '<div class="text-danger">Failed to load collections</div>';
+            }
+        }
+
+        // Load recent backups with delete option
+        async function loadRecentBackups() {
+            try {
+                const response = await fetch('/api/db/backups');
+                const data = await response.json();
+                
+                const container = document.getElementById('recentBackups');
+                
+                if (data.backups && data.backups.length > 0) {
+                    const html = data.backups.map(backup => `
+                        <div class="d-flex justify-content-between align-items-center border-bottom py-2">
+                            <div>
+                                <div class="fw-medium">${backup.filename}</div>
+                                <small class="text-muted">Size: ${backup.size} | Created: ${backup.created}</small>
+                            </div>
+                            <div class="btn-group" role="group">
+                                <button class="btn btn-sm btn-outline-primary" onclick="selectBackupForRestore('${backup.filename}')">
+                                    <i class="fas fa-upload"></i> Restore
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteBackupFile('${backup.filename}')">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </div>
+                        </div>
+                    `).join('');
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div class="text-muted">No backup files found</div>';
+                }
+            } catch (error) {
+                console.error('Failed to load recent backups:', error);
+                document.getElementById('recentBackups').innerHTML = 
+                    '<div class="text-danger">Failed to load backup files</div>';
+            }
+        }
+
+        // Select backup for restore
+        function selectBackupForRestore(filename) {
+            const selectElement = document.getElementById('backupFiles');
+            selectElement.value = filename;
+            toggleRestoreButton();
+            // Scroll to restore section
+            document.querySelector('[id*="restore"]').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Delete backup file
+        async function deleteBackupFile(filename) {
+            if (!confirm(`Are you sure you want to delete backup: ${filename}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/db/backup/${filename}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage(result.message, 'success');
+                    loadRecentBackups(); // Refresh backup list
+                    loadBackupFiles(); // Refresh restore dropdown
+                } else {
+                    showMessage('Delete failed: ' + result.error, 'danger');
+                }
+            } catch (error) {
+                showMessage('Delete failed: ' + error.message, 'danger');
+            }
+        }
+
+        // Load backup files
+        async function loadBackupFiles() {
+            try {
+                const response = await fetch('/api/db/backups');
+                const data = await response.json();
+                
+                const select = document.getElementById('backupFiles');
+                
+                if (data.backups && data.backups.length > 0) {
+                    const options = data.backups.map(backup => 
+                        `<option value="${backup.filename}">${backup.filename} (${backup.size})</option>`
+                    ).join('');
+                    select.innerHTML = '<option value="">Select a backup file...</option>' + options;
+                } else {
+                    select.innerHTML = '<option value="">No backup files found</option>';
+                }
+            } catch (error) {
+                console.error('Failed to load backup files:', error);
+                document.getElementById('backupFiles').innerHTML = 
+                    '<option value="">Failed to load backup files</option>';
+            }
+        }
+
+        // Load database health info
+        async function loadDatabaseHealth() {
+            try {
+                const response = await fetch('/api/db/health');
+                const health = await response.json();
+                
+                const dbSizeEl = document.getElementById('dbSize');
+                const lastCollectionEl = document.getElementById('lastCollection');
+                const dataRetentionEl = document.getElementById('dataRetention');
+                
+                if (dbSizeEl) dbSizeEl.textContent = health.database_size || '-';
+                if (lastCollectionEl) lastCollectionEl.textContent = 
+                    health.last_collection ? new Date(health.last_collection).toLocaleDateString() : 'Never';
+                if (dataRetentionEl) dataRetentionEl.textContent = health.data_retention || '30 days';
+            } catch (error) {
+                console.debug('Database health check failed:', error);
+            }
+        }
+
+        // Create backup
+        async function createBackup() {
+            const button = document.getElementById('createBackup');
+            const progress = document.getElementById('backupProgress');
+            
+            button.disabled = true;
+            progress.style.display = 'block';
+            
+            try {
+                const response = await fetch('/api/db/backup', {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage('Backup created successfully: ' + result.filename, 'success');
+                    loadRecentBackups(); // Refresh recent backups list
+                    loadBackupFiles(); // Refresh backup dropdown
+                } else {
+                    showMessage('Backup failed: ' + result.error, 'danger');
+                }
+            } catch (error) {
+                showMessage('Backup failed: ' + error.message, 'danger');
+            } finally {
+                button.disabled = false;
+                progress.style.display = 'none';
+            }
+        }
+
+        // Restore backup
+        async function restoreBackup() {
+            const filename = document.getElementById('backupFiles').value;
+            
+            if (!filename) {
+                showMessage('Please select a backup file', 'warning');
+                return;
+            }
+
+            if (!confirm('This will replace all current data with the backup. Are you sure?')) {
+                return;
+            }
+
+            const button = document.getElementById('restoreBackup');
+            const progress = document.getElementById('restoreProgress');
+            
+            button.disabled = true;
+            progress.style.display = 'block';
+            
+            try {
+                const response = await fetch('/api/db/restore', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ filename: filename })
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage('Database restored successfully', 'success');
+                    // Refresh all data
+                    setTimeout(() => {
+                        loadDatabaseStats();
+                        loadRecentCollections();
+                        loadDatabaseHealth();
+                    }, 1000);
+                } else {
+                    showMessage('Restore failed: ' + result.error, 'danger');
+                }
+            } catch (error) {
+                showMessage('Restore failed: ' + error.message, 'danger');
+            } finally {
+                button.disabled = false;
+                progress.style.display = 'none';
+            }
+        }
+
+        // Toggle restore button
+        function toggleRestoreButton() {
+            const filename = document.getElementById('backupFiles').value;
+            document.getElementById('restoreBackup').disabled = !filename;
+        }
+
+        // Show message
+        async function startNewCollection() {
+            const button = document.getElementById('newCollection');
+            const originalText = button.innerHTML;
+            
+            try {
+                // Show loading state
+                button.disabled = true;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
+                
+                const response = await fetch('/api/db/collect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const result = await response.json();
+                
+                if (result.needs_credentials) {
+                    // Restore button and show credentials form
+                    button.disabled = false;
+                    button.innerHTML = originalText;
+                    showCredentialsModal();
+                } else if (result.success) {
+                    button.innerHTML = '<i class="fas fa-cog fa-spin"></i> Collection Running...';
+                    showAlert('Collection started successfully!', 'success');
+                    // Keep button disabled while collection runs
+                    setTimeout(() => {
+                        loadDatabaseStats();
+                        loadRecentCollections();
+                        checkCollectionStatus(); // Check if collection is still running
+                    }, 1000);
+                } else {
+                    button.disabled = false;
+                    button.innerHTML = originalText;
+                    showAlert('Failed to start collection: ' + result.error, 'danger');
+                }
+            } catch (error) {
+                button.disabled = false;
+                button.innerHTML = originalText;
+                showAlert('Error starting collection: ' + error.message, 'danger');
+            }
+        }
+
+        async function checkCollectionStatus() {
+            try {
+                const response = await fetch('/api/collection/status');
+                const status = await response.json();
+                const button = document.getElementById('newCollection');
+                
+                if (button) {
+                    if (status.is_running) {
+                        button.disabled = true;
+                        button.classList.remove('btn-primary');
+                        button.classList.add('btn-warning');
+                        const message = status.collection_id ? 
+                            `Collection ${status.collection_id.substring(0, 8)}... running (${status.duration_minutes || 0} min)` :
+                            'Collection Running...';
+                        button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + message;
+                        // Check again in 5 seconds
+                        setTimeout(checkCollectionStatus, 5000);
+                    } else {
+                        button.disabled = false;
+                        button.classList.remove('btn-warning');
+                        button.classList.add('btn-primary');
+                        button.innerHTML = '<i class="fas fa-plus me-2"></i>New Collection';
+                    }
+                }
+            } catch (error) {
+                console.debug('Collection status check failed:', error);
+                // Re-enable button if status check fails
+                const button = document.getElementById('newCollection');
+                if (button) {
+                    button.disabled = false;
+                    button.classList.remove('btn-warning');
+                    button.classList.add('btn-primary');
+                    button.innerHTML = '<i class="fas fa-plus me-2"></i>New Collection';
+                }
+            }
+        }
+
+        async function cleanupStuckCollections() {
+            const button = document.getElementById('cleanupCollections');
+            const originalText = button.innerHTML;
+            
+            try {
+                button.disabled = true;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Cleaning...';
+                
+                const response = await fetch('/api/db/collections/cleanup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert(`Cleaned up ${result.cleaned_count} stuck collections`, 'success');
+                    // Refresh the collections list and stats
+                    loadRecentCollections();
+                    loadDatabaseStats();
+                    checkCollectionStatus(); // Check if button should be re-enabled
+                } else {
+                    showAlert('Failed to cleanup collections: ' + result.error, 'danger');
+                }
+            } catch (error) {
+                showAlert('Error during cleanup: ' + error.message, 'danger');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = originalText;
+            }
+        }
+
+        async function forceCleanupCollections() {
+            const button = document.getElementById('forceCleanup');
+            const originalText = button.innerHTML;
+            
+            // Show confirmation dialog
+            if (!confirm('This will force reset ALL running collections to failed status. Are you sure?')) {
+                return;
+            }
+            
+            try {
+                button.disabled = true;
+                button.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Resetting...';
+                
+                const response = await fetch('/api/db/collections/force-cleanup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert(`Force reset completed: ${result.reset_count} collections reset`, 'warning');
+                    // Refresh the collections list and stats
+                    loadRecentCollections();
+                    loadDatabaseStats();
+                    checkCollectionStatus(); // Check if button should be re-enabled
+                } else {
+                    showAlert('Failed to force reset collections: ' + result.error, 'danger');
+                }
+            } catch (error) {
+                showAlert('Error during force reset: ' + error.message, 'danger');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = originalText;
+            }
+        }
+
+        function showCredentialsModal() {
+            const modal = document.createElement('div');
+            modal.className = 'modal fade';
+            modal.innerHTML = `
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Switch Credentials Required</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <form id="credentialsForm">
+                                <div class="mb-3">
+                                    <label class="form-label">SSH Username</label>
+                                    <input type="text" class="form-control" id="sshUsername" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">SSH Password</label>
+                                    <input type="password" class="form-control" id="sshPassword" required>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" onclick="startCollectionWithCredentials()">Start Collection</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+            const bsModal = new bootstrap.Modal(modal);
+            bsModal.show();
+            
+            // Remove modal from DOM when closed
+            modal.addEventListener('hidden.bs.modal', () => {
+                document.body.removeChild(modal);
+            });
+        }
+
+        async function startCollectionWithCredentials() {
+            const username = document.getElementById('sshUsername').value;
+            const password = document.getElementById('sshPassword').value;
+            
+            if (!username || !password) {
+                showAlert('Please enter both username and password', 'warning');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/db/collect-with-credentials', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Close modal
+                    const modal = bootstrap.Modal.getInstance(document.querySelector('.modal'));
+                    modal.hide();
+                    
+                    showAlert('Collection started successfully!', 'success');
+                    setTimeout(() => {
+                        loadDatabaseStats();
+                        loadRecentCollections();
+                    }, 1000);
+                } else {
+                    showAlert('Failed to start collection: ' + result.error, 'danger');
+                }
+            } catch (error) {
+                showAlert('Error starting collection: ' + error.message, 'danger');
+            }
+        }
+
+        // Cleanup temporary files
+        async function cleanupTemporaryFiles() {
+            const button = document.getElementById('cleanupTempFiles');
+            const originalText = button.innerHTML;
+            
+            button.disabled = true;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Cleaning...';
+            
+            try {
+                const response = await fetch('/api/logs/cleanup', {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert('Temporary files cleaned successfully', 'success');
+                } else {
+                    showAlert('Failed to clean temporary files: ' + result.error, 'danger');
+                }
+            } catch (error) {
+                showAlert('Error cleaning temporary files: ' + error.message, 'danger');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = originalText;
+            }
+        }
+
+        function showAlert(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            const container = document.querySelector('.container-fluid');
+            container.insertBefore(alertDiv, container.firstChild);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+
+        async function exportResults() {
+            try {
+                const response = await fetch('/api/db/search?limit=0');
+                const data = await response.json();
+                
+                if (data.results && data.results.length > 0) {
+                    const exportResponse = await fetch('/api/export-csv', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ entries: data.results })
+                    });
+
+                    if (exportResponse.ok) {
+                        const blob = await exportResponse.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `switch_logs_${new Date().toISOString().split('T')[0]}.csv`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);
+                        
+                        showMessage('Export completed successfully', 'success');
+                    } else {
+                        showMessage('Export failed', 'danger');
+                    }
+                } else {
+                    showMessage('No data to export', 'warning');
+                }
+            } catch (error) {
+                showMessage('Export failed: ' + error.message, 'danger');
+            }
+        }
+
+        function showMessage(message, type) {
+            const container = document.getElementById('statusMessages');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type} alert-dismissible fade show`;
+            alert.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            container.appendChild(alert);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                if (alert.parentNode) {
+                    alert.remove();
+                }
+            }, 5000);
+        }
+
+        function showAboutModal() {
+            const modal = new bootstrap.Modal(document.getElementById('aboutModal'));
+            modal.show();
+        }
+    </script>
+
+    <!-- About Modal -->
+    <div class="modal fade" id="aboutModal" tabindex="-1" aria-labelledby="aboutModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="aboutModalLabel">
+                        <i class="fas fa-info-circle me-2"></i>
+                        About Switch Log Analyzer
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-4 text-center">
+                            <i class="fas fa-network-wired fa-4x text-primary mb-3"></i>
+                            <h6>FC Login/Logout Analysis</h6>
+                        </div>
+                        <div class="col-md-8">
+                            <h6>Sistema Avanzato di Analisi Log</h6>
+                            <p class="text-muted">
+                                Un sistema professionale per l'analisi dei log di switch Brocade che raccoglie, 
+                                elabora e analizza eventi WWN attraverso connessioni SSH automatizzate.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-cogs me-2"></i>Funzionalità Principali</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="fas fa-check text-success me-2"></i>Raccolta automatizzata log switch</li>
+                                <li><i class="fas fa-check text-success me-2"></i>Processing parallelo multi-switch</li>
+                                <li><i class="fas fa-check text-success me-2"></i>Logica NPIV intelligente</li>
+                                <li><i class="fas fa-check text-success me-2"></i>Scheduling automatico</li>
+                                <li><i class="fas fa-check text-success me-2"></i>Database PostgreSQL ottimizzato</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-chart-line me-2"></i>Performance</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="fas fa-bolt text-warning me-2"></i>Lookup device sub-millisecondo</li>
+                                <li><i class="fas fa-bolt text-warning me-2"></i>Cache LRU 10K entries</li>
+                                <li><i class="fas fa-bolt text-warning me-2"></i>Fino a 8 worker paralleli</li>
+                                <li><i class="fas fa-bolt text-warning me-2"></i>Indici database ottimizzati</li>
+                                <li><i class="fas fa-bolt text-warning me-2"></i>Export CSV streaming</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h6><i class="fas fa-code me-2"></i>Architettura Tecnica</h6>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="card border-primary h-100">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-globe text-primary fa-2x mb-2"></i>
+                                            <h6 class="card-title">Frontend</h6>
+                                            <small class="text-muted">Bootstrap 5 + JavaScript</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card border-success h-100">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-server text-success fa-2x mb-2"></i>
+                                            <h6 class="card-title">Backend</h6>
+                                            <small class="text-muted">Flask + SQLAlchemy</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card border-warning h-100">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-database text-warning fa-2x mb-2"></i>
+                                            <h6 class="card-title">Database</h6>
+                                            <small class="text-muted">PostgreSQL + SQLite</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <div class="me-auto">
+                        <small class="text-muted">
+                            <i class="fas fa-calendar me-1"></i>
+                            Al.Fa. Tech - Versione 2.0 - Giugno 2025
+                        </small>
+                    </div>
+                    <a href="https://github.com/axxx75/Brocade-NsDevLog" target="_blank" class="btn btn-outline-primary btn-sm">
+                        <i class="fab fa-github me-1"></i>
+                        GitHub Repository
+                    </a>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

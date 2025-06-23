@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scheduler - Switch Log Analyzer</title>
+    <link href="static/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+
+    <style>
+        .navbar-brand { font-weight: bold; }
+        .card { box-shadow: 0 2px 4px rgba(0,0,0,0.1); border: none; }
+        .schedule-card { transition: transform 0.2s; }
+        .schedule-card:hover { transform: translateY(-2px); }
+        .schedule-status { font-size: 0.9em; }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-network-wired me-2"></i>
+                Switch Log Analyzer
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">
+                            <i class="fas fa-search me-1"></i>
+                            Database Search
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/scheduler">
+                            <i class="fas fa-clock me-1"></i>
+                            Scheduler
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/maintenance">
+                            <i class="fas fa-tools me-1"></i>
+                            Maintenance
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="https://github.com/axxx75/Brocade-NsDevLog/blob/main/README.md" target="_blank">
+                            <i class="fas fa-question-circle me-1"></i>
+                            Help
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" onclick="showAboutModal()">
+                            <i class="fas fa-info-circle me-1"></i>
+                            About
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <!-- Collection Scheduler Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card schedule-card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-sync-alt me-2"></i>
+                            Collection Scheduler
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Configure Automated Collections</h6>
+                                <p class="text-muted">Schedule automatic data collection from switches at regular intervals.</p>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Collection Frequency</label>
+                                    <select class="form-control" id="collectionFrequency">
+                                        <option value="disabled">Disabled</option>
+                                        <option value="hourly">Every Hour</option>
+                                        <option value="daily">Daily at 6:00 AM</option>
+                                        <option value="weekly">Weekly (Sundays at 6:00 AM)</option>
+                                        <option value="custom">Custom Schedule</option>
+                                    </select>
+                                </div>
+                                
+                                <div id="customSchedule" class="mb-3" style="display: none;">
+                                    <label class="form-label">Custom Cron Expression</label>
+                                    <input type="text" class="form-control" id="cronExpression" placeholder="0 6 * * 0">
+                                    <small class="form-text text-muted">Format: minute hour day month weekday</small>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Switch Credentials</label>
+                                    <div class="row">
+                                        <div class="col-6">
+                                            <input type="text" class="form-control" id="collectionUsername" placeholder="Username">
+                                        </div>
+                                        <div class="col-6">
+                                            <input type="password" class="form-control" id="collectionPassword" placeholder="Password">
+                                        </div>
+                                    </div>
+                                    <small class="form-text text-muted">Required for accessing switches</small>
+                                </div>
+                                
+                                <button id="saveCollectionSchedule" class="btn btn-primary">
+                                    <i class="fas fa-save me-1"></i>
+                                    Save Schedule
+                                </button>
+                                <button id="triggerManualCollection" class="btn btn-outline-primary ms-2">
+                                    <i class="fas fa-play me-1"></i>
+                                    Run Now
+                                </button>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Current Status</h6>
+                                <div id="collectionStatus" class="schedule-status">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Status:</span>
+                                        <span id="collectionStatusText" class="badge bg-secondary">Loading...</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Last Run:</span>
+                                        <span id="lastCollectionTime">-</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Next Run:</span>
+                                        <span id="nextCollectionTime">-</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span>Schedule:</span>
+                                        <span id="currentSchedule">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Backup Scheduler Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card schedule-card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-database me-2"></i>
+                            Database Backup Scheduler
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Configure Automated Backups</h6>
+                                <p class="text-muted">Schedule automatic database backups to protect your data.</p>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Backup Frequency</label>
+                                    <select class="form-control" id="backupFrequency">
+                                        <option value="disabled">Disabled</option>
+                                        <option value="daily">Daily at 2:00 AM</option>
+                                        <option value="weekly">Weekly (Saturdays at 2:00 AM)</option>
+                                        <option value="monthly">Monthly (1st at 2:00 AM)</option>
+                                        <option value="custom">Custom Schedule</option>
+                                    </select>
+                                </div>
+                                
+                                <div id="customBackupSchedule" class="mb-3" style="display: none;">
+                                    <label class="form-label">Custom Cron Expression</label>
+                                    <input type="text" class="form-control" id="backupCronExpression" placeholder="0 2 * * 6">
+                                    <small class="form-text text-muted">Format: minute hour day month weekday</small>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Backup Retention</label>
+                                    <select class="form-control" id="backupRetention">
+                                        <option value="7">Keep 7 backups</option>
+                                        <option value="14">Keep 14 backups</option>
+                                        <option value="30">Keep 30 backups</option>
+                                        <option value="60">Keep 60 backups</option>
+                                    </select>
+                                </div>
+                                
+                                <button id="saveBackupSchedule" class="btn btn-success">
+                                    <i class="fas fa-save me-1"></i>
+                                    Save Schedule
+                                </button>
+                                <button id="triggerManualBackup" class="btn btn-outline-success ms-2">
+                                    <i class="fas fa-download me-1"></i>
+                                    Backup Now
+                                </button>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Backup Status</h6>
+                                <div id="backupStatus" class="schedule-status">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Status:</span>
+                                        <span id="backupStatusText" class="badge bg-secondary">Loading...</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Last Backup:</span>
+                                        <span id="lastBackupTime">-</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Next Backup:</span>
+                                        <span id="nextBackupTime">-</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span>Schedule:</span>
+                                        <span id="currentBackupSchedule">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scheduled Jobs Management -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">
+                            <i class="fas fa-cogs me-2"></i>
+                            Scheduled Jobs Management
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="scheduledJobsList">
+                            <!-- Jobs will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Activities -->
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-history me-2"></i>
+                            Recent Collections
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="recentCollections">
+                            Loading...
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h6 class="mb-0">
+                            <i class="fas fa-archive me-2"></i>
+                            Recent Backups
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div id="recentBackups">
+                            Loading...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Messages -->
+        <div id="statusMessages" class="mt-4"></div>
+    </div>
+
+    <script src="static/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSchedulerStatus();
+            loadRecentActivities();
+            loadScheduledJobs();
+            
+            // Event listeners
+            document.getElementById('collectionFrequency').addEventListener('change', toggleCustomSchedule);
+            document.getElementById('backupFrequency').addEventListener('change', toggleCustomBackupSchedule);
+            document.getElementById('saveCollectionSchedule').addEventListener('click', saveCollectionSchedule);
+            document.getElementById('saveBackupSchedule').addEventListener('click', saveBackupSchedule);
+            document.getElementById('triggerManualCollection').addEventListener('click', triggerManualCollection);
+            document.getElementById('triggerManualBackup').addEventListener('click', triggerManualBackup);
+            
+            // Header buttons - only if element exists
+            const exportBtn = document.getElementById('exportResults');
+            if (exportBtn) {
+                exportBtn.addEventListener('click', exportResults);
+            }
+        });
+
+        function toggleCustomSchedule() {
+            const frequency = document.getElementById('collectionFrequency').value;
+            document.getElementById('customSchedule').style.display = 
+                frequency === 'custom' ? 'block' : 'none';
+        }
+
+        function toggleCustomBackupSchedule() {
+            const frequency = document.getElementById('backupFrequency').value;
+            document.getElementById('customBackupSchedule').style.display = 
+                frequency === 'custom' ? 'block' : 'none';
+        }
+
+        async function loadSchedulerStatus() {
+            try {
+                const response = await fetch('/api/scheduler/status');
+                const status = await response.json();
+                
+                // Update collection status
+                document.getElementById('collectionStatusText').textContent = status.collection_enabled ? 'Active' : 'Inactive';
+                document.getElementById('collectionStatusText').className = 
+                    `badge bg-${status.collection_enabled ? 'success' : 'secondary'}`;
+                document.getElementById('lastCollectionTime').textContent = 
+                    status.last_collection ? new Date(status.last_collection).toLocaleString() : 'Never';
+                document.getElementById('nextCollectionTime').textContent = 
+                    status.next_collection && status.next_collection !== 'Not scheduled' ? 
+                    new Date(status.next_collection).toLocaleString() : 'Not scheduled';
+                document.getElementById('currentSchedule').textContent = 
+                    status.collection_schedule || 'Not configured';
+                
+                // Update backup status
+                document.getElementById('backupStatusText').textContent = status.backup_enabled ? 'Active' : 'Inactive';
+                document.getElementById('backupStatusText').className = 
+                    `badge bg-${status.backup_enabled ? 'success' : 'secondary'}`;
+                document.getElementById('lastBackupTime').textContent = 
+                    status.last_backup ? new Date(status.last_backup).toLocaleString() : 'Never';
+                document.getElementById('nextBackupTime').textContent = 
+                    status.next_backup && status.next_backup !== 'Not scheduled' ? 
+                    new Date(status.next_backup).toLocaleString() : 'Not scheduled';
+                document.getElementById('currentBackupSchedule').textContent = 
+                    status.backup_schedule || 'Not configured';
+                    
+            } catch (error) {
+                console.error('Failed to load scheduler status:', error);
+            }
+        }
+
+        async function loadRecentActivities() {
+            try {
+                // Load recent collections
+                const collectionsResponse = await fetch('/api/db/collections');
+                const collectionsData = await collectionsResponse.json();
+                
+                const collectionsContainer = document.getElementById('recentCollections');
+                if (collectionsData.collections && collectionsData.collections.length > 0) {
+                    const html = collectionsData.collections.slice(0, 5).map(collection => `
+                        <div class="d-flex justify-content-between align-items-center border-bottom py-2">
+                            <div>
+                                <div class="small fw-medium">${new Date(collection.started_at).toLocaleString()}</div>
+                                <div class="text-muted small">${collection.total_entries} entries</div>
+                            </div>
+                            <span class="badge bg-${collection.status === 'completed' ? 'success' : collection.status === 'failed' ? 'danger' : 'warning'} small">
+                                ${collection.status}
+                            </span>
+                        </div>
+                    `).join('');
+                    collectionsContainer.innerHTML = html;
+                } else {
+                    collectionsContainer.innerHTML = '<div class="text-muted small">No recent collections</div>';
+                }
+                
+                // Load recent backups
+                const backupsResponse = await fetch('/api/db/backups');
+                const backupsData = await backupsResponse.json();
+                
+                const backupsContainer = document.getElementById('recentBackups');
+                if (backupsData.backups && backupsData.backups.length > 0) {
+                    const html = backupsData.backups.slice(0, 5).map(backup => `
+                        <div class="d-flex justify-content-between align-items-center border-bottom py-2">
+                            <div>
+                                <div class="small fw-medium">${backup.filename}</div>
+                                <div class="text-muted small">${backup.size}</div>
+                            </div>
+                            <div class="text-muted small">${new Date(backup.created).toLocaleDateString()}</div>
+                        </div>
+                    `).join('');
+                    backupsContainer.innerHTML = html;
+                } else {
+                    backupsContainer.innerHTML = '<div class="text-muted small">No recent backups</div>';
+                }
+                
+            } catch (error) {
+                console.error('Failed to load recent activities:', error);
+            }
+        }
+
+        async function saveCollectionSchedule() {
+            const frequency = document.getElementById('collectionFrequency').value;
+            const cronExpression = document.getElementById('cronExpression').value;
+            const username = document.getElementById('collectionUsername').value.trim();
+            const password = document.getElementById('collectionPassword').value.trim();
+            
+            if (frequency === 'disabled') {
+                showMessage('Please select a collection frequency', 'warning');
+                return;
+            }
+            
+            if (!username || !password) {
+                showMessage('Please provide switch credentials', 'warning');
+                return;
+            }
+            
+            // Generate cron expression based on frequency
+            let cron = cronExpression;
+            if (frequency !== 'custom') {
+                switch (frequency) {
+                    case 'hourly':
+                        cron = '0 * * * *';
+                        break;
+                    case 'daily':
+                        cron = '0 6 * * *';
+                        break;
+                    case 'weekly':
+                        cron = '0 6 * * 0';
+                        break;
+                }
+            }
+            
+            if (!cron) {
+                showMessage('Please provide a valid cron expression', 'warning');
+                return;
+            }
+            
+            try {
+                console.log('Saving collection schedule:', {
+                    name: `Collection Schedule (${frequency})`,
+                    cron: cron,
+                    username: username,
+                    type: 'collection'
+                });
+                
+                const response = await fetch('/api/scheduler/jobs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: `Collection Schedule (${frequency})`,
+                        cron: cron,
+                        username: username,
+                        password: password,
+                        type: 'collection'
+                    })
+                });
+                
+                const result = await response.json();
+                console.log('Response status:', response.status);
+                console.log('Response data:', result);
+                
+                if (result.success) {
+                    showMessage('Collection schedule saved successfully', 'success');
+                    loadSchedulerStatus();
+                    loadScheduledJobs();
+                } else {
+                    showMessage('Failed to save schedule: ' + result.error, 'danger');
+                }
+            } catch (error) {
+                console.error('Collection schedule error:', error);
+                showMessage('Failed to save schedule: ' + error.message, 'danger');
+            }
+        }
+
+        async function saveBackupSchedule() {
+            const frequency = document.getElementById('backupFrequency').value;
+            const cronExpression = document.getElementById('backupCronExpression').value;
+            const retention = document.getElementById('backupRetention').value;
+            
+            // Convert frequency to cron expression
+            let cron;
+            switch(frequency) {
+                case 'daily':
+                    cron = '0 2 * * *'; // Daily at 2 AM
+                    break;
+                case 'weekly':
+                    cron = '0 2 * * 0'; // Weekly on Sunday at 2 AM
+                    break;
+                case 'monthly':
+                    cron = '0 2 1 * *'; // Monthly on 1st at 2 AM
+                    break;
+                case 'custom':
+                    cron = cronExpression;
+                    break;
+                default:
+                    showMessage('Please select a backup frequency', 'warning');
+                    return;
+            }
+            
+            if (!cron) {
+                showMessage('Please provide a valid cron expression', 'warning');
+                return;
+            }
+            
+            try {
+                console.log('Saving backup schedule:', {
+                    name: `Database Backup (${frequency})`,
+                    cron: cron,
+                    username: 'backup',
+                    password: 'backup',
+                    type: 'backup'
+                });
+                
+                const response = await fetch('/api/scheduler/jobs', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        name: `Database Backup (${frequency})`,
+                        cron: cron,
+                        username: 'backup', // Backup jobs don't need actual switch credentials
+                        password: 'backup',
+                        type: 'backup'
+                    })
+                });
+                
+                console.log('Response status:', response.status);
+                const result = await response.json();
+                console.log('Response data:', result);
+                
+                if (result.success) {
+                    showMessage('Backup schedule saved successfully', 'success');
+                    loadSchedulerStatus();
+                } else {
+                    showMessage('Failed to save backup schedule: ' + result.error, 'danger');
+                }
+            } catch (error) {
+                console.error('Backup schedule error:', error);
+                showMessage('Failed to save backup schedule: ' + error.message, 'danger');
+            }
+        }
+
+        async function triggerManualCollection() {
+            try {
+                const response = await fetch('/api/db/collect', {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showMessage('Collection started successfully', 'success');
+                    setTimeout(loadRecentActivities, 2000);
+                } else {
+                    if (result.error && result.error.includes('credentials not configured')) {
+                        showCredentialsModal();
+                    } else {
+                        showMessage('Failed to start collection: ' + result.error, 'danger');
+                    }
+                }
+            } catch (error) {
+                showMessage('Failed to start collection: ' + error.message, 'danger');
+            }
+        }
+
+        function showCredentialsModal() {
+            const modal = document.createElement('div');
+            modal.className = 'modal fade';
+            modal.id = 'credentialsModal';
+            modal.innerHTML = `
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Switch Credentials Required</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="text-muted">Please provide switch credentials to start the collection:</p>
+                            <div class="mb-3">
+                                <label class="form-label">Username</label>
+                                <input type="text" class="form-control" id="switchUsername" placeholder="Enter switch username">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Password</label>
+                                <input type="password" class="form-control" id="switchPassword" placeholder="Enter switch password">
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" onclick="startCollectionWithCredentials()">Start Collection</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(modal);
+            const bootstrapModal = new bootstrap.Modal(modal);
+            bootstrapModal.show();
+            
+            modal.addEventListener('hidden.bs.modal', function() {
+                document.body.removeChild(modal);
+            });
+        }
+
+        async function startCollectionWithCredentials() {
+            const username = document.getElementById('switchUsername').value.trim();
+            const password = document.getElementById('switchPassword').value.trim();
+            
+            if (!username || !password) {
+                showMessage('Please provide both username and password', 'warning');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/db/collect-with-credentials', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage('Collection started successfully', 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('credentialsModal')).hide();
+                    setTimeout(loadRecentActivities, 2000);
+                } else {
+                    showMessage('Failed to start collection: ' + result.error, 'danger');
+                }
+            } catch (error) {
+                showMessage('Failed to start collection: ' + error.message, 'danger');
+            }
+        }
+
+        async function triggerManualBackup() {
+            try {
+                const response = await fetch('/api/db/backup', {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showMessage('Backup created successfully', 'success');
+                    setTimeout(loadRecentActivities, 2000);
+                } else {
+                    showMessage('Failed to create backup: ' + result.error, 'danger');
+                }
+            } catch (error) {
+                showMessage('Failed to create backup: ' + error.message, 'danger');
+            }
+        }
+
+        async function loadScheduledJobs() {
+            try {
+                const response = await fetch('/api/scheduler/status');
+                const data = await response.json();
+                
+                const jobsContainer = document.getElementById('scheduledJobsList');
+                
+                if (data.jobs && data.jobs.length > 0) {
+                    const html = data.jobs.map(job => {
+                        const jobType = job.name.toLowerCase().includes('backup') ? 'backup' : 'collection';
+                        const badgeClass = job.enabled ? 'bg-success' : 'bg-secondary';
+                        const nextRun = job.next_run && job.next_run !== 'Not scheduled' ? new Date(job.next_run).toLocaleString() : 'Not scheduled';
+                        const lastRun = job.last_run ? new Date(job.last_run).toLocaleString() : 'Never';
+                        
+                        return `
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-6">
+                                            <h6 class="mb-1">
+                                                <i class="fas fa-${jobType === 'backup' ? 'database' : 'sync'} me-2"></i>
+                                                ${job.name}
+                                            </h6>
+                                            <p class="text-muted mb-1">Schedule: ${job.cron_expression}</p>
+                                            <small class="text-muted">Created: ${new Date(job.created_at).toLocaleDateString()}</small>
+                                            ${jobType === 'collection' ? '<small class="text-muted d-block">Password: ●●●●●●●●</small>' : ''}
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="small">
+                                                <div><strong>Status:</strong> <span class="badge ${badgeClass}">${job.enabled ? 'Active' : 'Disabled'}</span></div>
+                                                <div><strong>Last Run:</strong> ${lastRun}</div>
+                                                <div><strong>Next Run:</strong> ${nextRun}</div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3 text-end">
+                                            <div class="btn-group" role="group">
+                                                <button class="btn btn-sm btn-outline-warning" onclick="toggleJob('${job.id}', ${job.enabled})">
+                                                    <i class="fas fa-${job.enabled ? 'pause' : 'play'}"></i>
+                                                    ${job.enabled ? 'Pause' : 'Resume'}
+                                                </button>
+                                                <button class="btn btn-sm btn-outline-danger" onclick="deleteJob('${job.id}', '${job.name}')">
+                                                    <i class="fas fa-trash"></i>
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                    
+                    jobsContainer.innerHTML = html;
+                } else {
+                    jobsContainer.innerHTML = `
+                        <div class="text-center py-4">
+                            <i class="fas fa-calendar-times fa-3x text-muted mb-3"></i>
+                            <p class="text-muted">No scheduled jobs configured yet.</p>
+                            <p class="small text-muted">Create collection or backup schedules above to see them here.</p>
+                        </div>
+                    `;
+                }
+                
+            } catch (error) {
+                console.error('Failed to load scheduled jobs:', error);
+                document.getElementById('scheduledJobsList').innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Failed to load scheduled jobs
+                    </div>
+                `;
+            }
+        }
+
+        async function toggleJob(jobId, currentEnabled) {
+            try {
+                const action = currentEnabled ? 'pause' : 'resume';
+                const response = await fetch(`/api/scheduler/jobs/${jobId}/${action}`, {
+                    method: 'POST'
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showMessage(`Job ${action}d successfully`, 'success');
+                    loadScheduledJobs();
+                    loadSchedulerStatus();
+                } else {
+                    showMessage(`Failed to ${action} job: ` + result.error, 'danger');
+                }
+            } catch (error) {
+                showMessage(`Failed to toggle job: ` + error.message, 'danger');
+            }
+        }
+
+        async function deleteJob(jobId, jobName) {
+            if (!confirm(`Are you sure you want to delete the scheduled job "${jobName}"?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/scheduler/jobs/${jobId}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    showMessage('Job deleted successfully', 'success');
+                    loadScheduledJobs();
+                    loadSchedulerStatus();
+                } else {
+                    showMessage('Failed to delete job: ' + result.error, 'danger');
+                }
+            } catch (error) {
+                showMessage('Failed to delete job: ' + error.message, 'danger');
+            }
+        }
+
+        async function exportResults() {
+            try {
+                const response = await fetch('/api/db/search?limit=0');
+                const data = await response.json();
+                
+                if (data.results && data.results.length > 0) {
+                    const exportResponse = await fetch('/api/export-csv', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ entries: data.results })
+                    });
+
+                    if (exportResponse.ok) {
+                        const blob = await exportResponse.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'switch_logs_' + new Date().toISOString().split('T')[0] + '.csv';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);
+                        
+                        showMessage('Export completed successfully', 'success');
+                    } else {
+                        showMessage('Export failed', 'danger');
+                    }
+                } else {
+                    showMessage('No data to export', 'warning');
+                }
+            } catch (error) {
+                showMessage('Export failed: ' + error.message, 'danger');
+            }
+        }
+
+        function showMessage(message, type) {
+            const container = document.getElementById('statusMessages');
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-' + type + ' alert-dismissible fade show';
+            alert.innerHTML = message + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+            container.appendChild(alert);
+            
+            setTimeout(() => {
+                if (alert.parentNode) {
+                    alert.remove();
+                }
+            }, 5000);
+        }
+
+        function showAboutModal() {
+            const modal = new bootstrap.Modal(document.getElementById('aboutModal'));
+            modal.show();
+        }
+    </script>
+    <!-- About Modal -->
+    <div class="modal fade" id="aboutModal" tabindex="-1" aria-labelledby="aboutModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="aboutModalLabel">
+                        <i class="fas fa-info-circle me-2"></i>
+                        About Switch Log Analyzer
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row">
+                        <div class="col-md-4 text-center">
+                            <i class="fas fa-network-wired fa-4x text-primary mb-3"></i>
+                            <h6>FC Login/Logout Analysis</h6>
+                        </div>
+                        <div class="col-md-8">
+                            <h6>Sistema Avanzato di Analisi Log</h6>
+                            <p class="text-muted">
+                                Un sistema professionale per l'analisi dei log del nameserver Brocade che raccoglie,
+                                elabora e analizza eventi WWN attraverso connessioni SSH automatizzate.
+                            </p>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-cogs me-2"></i>Funzionalità Principali</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="fas fa-check text-success me-2"></i>Raccolta automatizzata log switch</li>
+                                <li><i class="fas fa-check text-success me-2"></i>Processing parallelo multi-switch</li>
+                                <li><i class="fas fa-check text-success me-2"></i>Logica NPIV intelligente</li>
+                                <li><i class="fas fa-check text-success me-2"></i>Scheduling automatico</li>
+                                <li><i class="fas fa-check text-success me-2"></i>Database PostgreSQL ottimizzato</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-chart-line me-2"></i>Performance</h6>
+                            <ul class="list-unstyled">
+                                <li><i class="fas fa-bolt text-warning me-2"></i>Lookup device sub-millisecondo</li>
+                                <li><i class="fas fa-bolt text-warning me-2"></i>Cache LRU 10K entries</li>
+                                <li><i class="fas fa-bolt text-warning me-2"></i>Fino a 8 worker paralleli</li>
+                                <li><i class="fas fa-bolt text-warning me-2"></i>Indici database ottimizzati</li>
+                                <li><i class="fas fa-bolt text-warning me-2"></i>Export CSV streaming</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="row">
+                        <div class="col-md-12">
+                            <h6><i class="fas fa-code me-2"></i>Architettura Tecnica</h6>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="card border-primary h-100">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-globe text-primary fa-2x mb-2"></i>
+                                            <h6 class="card-title">Frontend</h6>
+                                            <small class="text-muted">Bootstrap 5 + JavaScript</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card border-success h-100">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-server text-success fa-2x mb-2"></i>
+                                            <h6 class="card-title">Backend</h6>
+                                            <small class="text-muted">Flask + SQLAlchemy</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="card border-warning h-100">
+                                        <div class="card-body text-center">
+                                            <i class="fas fa-database text-warning fa-2x mb-2"></i>
+                                            <h6 class="card-title">Database</h6>
+                                            <small class="text-muted">PostgreSQL + SQLite</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <div class="me-auto">
+                        <small class="text-muted">
+                            <i class="fas fa-calendar me-1"></i>
+                            Al.FA Tech - Versione 2.0 - Giugno 2025
+                        </small>
+                    </div>
+                    <a href="https://github.com/axxx75/Brocade-NsDevLog" target="_blank" class="btn btn-outline-primary btn-sm">
+                        <i class="fab fa-github me-1"></i>
+                        GitHub Repository
+                    </a>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Chiudi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+
