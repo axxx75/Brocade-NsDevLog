@@ -72,31 +72,6 @@ graph TB
     K --> I
 ```
 
-## 🔧 Main Components
-
-### Core Files
-
-| File | function | Description |
-|------|----------|-------------|
-| `main.py` | **Controller Principale** | Flask app with API REST, scheduler background and route management |
-| `models.py` | **Database Schema** | Models SQLAlchemy for PostgreSQL with optimied index |
-| `config.py` | **Configurazione** | Essetial Settings essenziali and loading switch list |
-
-### Collection Engine
-
-| File | function | Description |
-|------|----------|-------------|
-| `simple_switch_collector.py` | **Main Process** | SSH single connection, parsing log, timestamp management |
-| `final_working_collector.py` | **Parallel Orchestrator** | Coordination of 4-8 simultaneous workers, database management |
-| `device_lookup_optimized.py` | **Lookup devices** | SQLite cache + LRU, advanced NPIV logic |
-
-### Configuration
-
-| File | function | Description |
-|------|----------|-------------|
-| `switches.conf` | **Lista Switch** | Switch configuration in the format `site:hostname:generation` |
-| `.env` | **Environment** | Database credentials and environment variables |
-
 ## 🔄 Workflow
 
 ### 1. Collection Process
