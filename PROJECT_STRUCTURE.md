@@ -25,7 +25,7 @@
 | `switches.conf` | **Lista Switch** | Switch configuration in the format `site:hostname:generation` |
 | `.env` | **Environment** | Database credentials and environment variables |
 
-## Template Files
+### Template Files
 
 | File | Purpose | Description |
 |------|---------|-------------|
@@ -33,7 +33,7 @@
 | **templates/maintenance.html** | Database Management | Backup creation, cleanup tools, health monitoring, and statistics |
 | **templates/scheduler.html** | Scheduler Administration | Job management with cron expressions, credential handling, and status monitoring |
 
-## Data Storage
+### Data Storage
 
 | File/Directory | Purpose | Description |
 |---------------|---------|-------------|
@@ -42,7 +42,9 @@
 | **backups/** | Database Backups | Native Python database backup storage with compression |
 
 
-## 📚 Files Documentation
+
+
+## 📚 Class and Method
 
 | File | Purpose | Classes/Functions | Description |
 |------|---------|-------------------|-------------|
